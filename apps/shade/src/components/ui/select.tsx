@@ -4,6 +4,7 @@ import { type VariantProps } from 'class-variance-authority';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { selectTriggerVariants } from '@/components/ui/select-variants';
+import { usePortalContainer } from '@/lib/app-overlay';
 import { cn } from '@/lib/utils';
 import { ShadeScope } from '@/shade-scope';
 import { inputSurface, inputSurfaceClasses } from '@/components/ui/input-surface';
@@ -94,7 +95,7 @@ const SelectContent = React.forwardRef<
     { className, children, onEscapeKeyDown, position = 'popper', collisionBoundary, ...props },
     ref,
   ) => (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={usePortalContainer()}>
       <ShadeScope>
         <SelectPrimitive.Content
           ref={ref}
@@ -104,7 +105,7 @@ const SelectContent = React.forwardRef<
               'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
             className,
           )}
-          {...safeAreaCollision(collisionBoundary)}
+          {...safeAreaCollision(collisionBoundary, usePortalContainer())}
           position={position}
           onEscapeKeyDown={(event) => consumeOverlayEscape(event, onEscapeKeyDown)}
           {...props}

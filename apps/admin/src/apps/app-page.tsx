@@ -311,7 +311,7 @@ const AppFrame: React.FC<{
     frameSession.subscribe,
     frameSession.getState,
   );
-  // The page frame, which the overlay frame covers, and where focus goes back to as it hides.
+  // The page frame, which focus goes back to as the overlay hides.
   const [pageFrame, setPageFrame] = useState<HTMLIFrameElement | null>(null);
   const attachFrame = useCallback(
     (frame: HTMLIFrameElement | null) => {
@@ -381,12 +381,11 @@ const AppFrame: React.FC<{
         <AppOverlay
           // A key of its own: the page frame's sibling, keyed by the same attempt.
           key={`overlay ${attempt}`}
-          area={pageFrame}
           colorScheme={resolvedTheme}
+          overlay={overlay}
           pageFrame={pageFrame}
           // The page's own address, so dialogs get the stylesheets of the page that renders them.
           src={appFrameUrl(url, path)}
-          tint={overlay}
           title={manifest.name}
           onDismiss={frameSession.overlayDismissed}
           onLeft={frameSession.overlayLeft}

@@ -32,8 +32,7 @@ import {
 // The prototype menu, as in the automations and analytics prototypes. A small
 // square in the bottom-right corner is the hover target; the beaker inside it
 // fades in while the pointer is over the square, while it has keyboard focus,
-// or while its menu is open. Away from Current it stays faintly visible, as a
-// reminder that a concept is showing.
+// or while its menu is open. Otherwise it's out of sight, whatever is picked.
 //
 // Its own React root, outside Admin's, so the screens being shaped never know
 // it's there (mounted by mount-menu.tsx). ShadeApp gives it Shade's styles
@@ -131,8 +130,6 @@ export const ShapingMenu: React.FC = () => {
               aria-label="Prototype"
               className={cn(
                 'bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover/proto:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none',
-                (panel !== 'current' || design !== 'current' || access !== 'current') &&
-                  'opacity-40',
                 open && 'bg-muted opacity-100',
               )}
               size="icon"

@@ -18,11 +18,16 @@ import { useSyncExternalStore } from 'react';
  *   width. Not an option of its own (it lost to docking when there's room),
  *   but what `auto` falls back to
  * - window: a smaller card over the page's bottom-right corner
- * - auto: push where the page keeps its full width beside it, float otherwise.
- *   Docked, it grows into the space a wide window leaves beside the page (see
- *   useHelpPanelWidth)
+ * - auto: push on a window wide enough to dock (DOCK_MIN_WIDTH), float on a
+ *   narrower one. Docked, it grows into the space a wide window leaves beside
+ *   the page (see useHelpPanelWidth)
+ * - auto-window: as auto, with the window on a narrower one, not the
+ *   full-height card
  */
-export type HelpPanelLayout = 'push' | 'float' | 'window' | 'auto';
+export type HelpPanelLayout = 'push' | 'float' | 'window' | 'auto' | 'auto-window';
+
+/** A layout that docks the panel beside the page where the window is wide enough. */
+const docksWhenWide = (layout: HelpPanelLayout) => layout === 'auto' || layout === 'auto-window';
 
 export interface HelpPanel {
   id: string;
@@ -48,8 +53,15 @@ export const HELP_PANELS = [
     id: 'dock',
     label: 'Floating',
     description:
-      'Beside the page on wide windows (1800px and up); a full-height card over its right edge on narrower ones.',
+      'Beside the page on wide windows (1600px and up); a full-height card over its right edge on narrower ones.',
     layout: 'auto',
+  },
+  {
+    id: 'hybrid',
+    label: 'Hybrid',
+    description:
+      'Beside the page on wide windows (1600px and up); the smaller card in the bottom-right corner on narrower ones.',
+    layout: 'auto-window',
   },
 ] as const satisfies readonly HelpPanel[];
 
@@ -110,9 +122,10 @@ export interface HelpAccess {
   topBar: boolean;
   /**
    * Calms the Admin 7 top bar's right side: a short month, long numbers
-   * abbreviated (128k), and a narrower search.
+   * abbreviated (128k), and a narrower search (300px, not 480px). `always`, or only on a window
+   * too narrow for the full top bar (`narrow`, see TOP_BAR_SLIM_BELOW).
    */
-  slim: boolean;
+  slim: 'never' | 'narrow' | 'always';
   /**
    * The panel shows where it can be opened from. Main's access point is the
    * main navigation, so the panel hides in Settings and the editor; one that's
@@ -128,7 +141,7 @@ export const HELP_ACCESS_POINTS = [
     description:
       'Help in the main navigation (the account menu in Admin 7). The panel hides in Settings and the editor.',
     topBar: false,
-    slim: false,
+    slim: 'never',
     everywhere: false,
   },
   {
@@ -137,7 +150,7 @@ export const HELP_ACCESS_POINTS = [
     description:
       'In the Admin 7 top bar, in place of the account menu. Classic adds it under the Settings menu. The panel shows on every screen.',
     topBar: true,
-    slim: false,
+    slim: 'never',
     everywhere: true,
   },
   {
@@ -146,18 +159,37 @@ export const HELP_ACCESS_POINTS = [
     description:
       'As A, with a calmer top bar: a short month, long numbers abbreviated (128k), and a narrower search.',
     topBar: true,
-    slim: true,
+    slim: 'always',
+    everywhere: true,
+  },
+  {
+    id: 'access-c',
+    label: 'Top bar hybrid',
+    description: 'The full top bar on wide windows (1600px and up), the slim one on narrower ones.',
+    topBar: true,
+    slim: 'narrow',
     everywhere: true,
   },
 ] as const satisfies readonly HelpAccess[];
 
+/**
+ * Below this window width the hybrid top bar is the slim one: Shade's `xxxl`
+ * breakpoint. With every number showing, the full top bar keeps search
+ * centred and at its full 480px down to about 1580px; narrower than that
+ * search slides off centre. The slim one keeps it centred down to about 1240px.
+ */
+export const TOP_BAR_SLIM_BELOW = 1600;
+
 export type HelpAccessId = (typeof HELP_ACCESS_POINTS)[number]['id'];
 
 /**
- * From this window width the page keeps its full content width beside a docked
- * panel as wide as main's. A wider panel needs that much more.
+ * From this window width the panel docks beside the page, in every design:
+ * Shade's `xxxl` breakpoint. The page is squeezed some beside it there, to
+ * about 880px of content beside main's panel and 800px beside a Roomy one,
+ * which was judged better than floating over it. (1800px, where the page was
+ * hardly squeezed, engaged the float too soon.)
  */
-export const DOCK_MIN_WIDTH = 1800;
+export const DOCK_MIN_WIDTH = 1600;
 
 const PANEL_KEY = 'shaping.help.panel';
 const DESIGN_KEY = 'shaping.help.design';
@@ -222,6 +254,15 @@ export const useHelpDesign = (): HelpDesign => {
   return HELP_DESIGNS.find((design) => design.id === id) ?? HELP_DESIGNS[0];
 };
 
+const isNarrowForFullTopBar = () => window.innerWidth < TOP_BAR_SLIM_BELOW;
+
+/** Whether the Admin 7 top bar shows slim: the access point's choice, for the window's width. */
+export const useTopBarSlim = (): boolean => {
+  const { slim } = useHelpAccess();
+  const narrow = useSyncExternalStore(subscribeToWidth, isNarrowForFullTopBar);
+  return slim === 'always' || (slim === 'narrow' && narrow);
+};
+
 export const useBusyTopBar = () => useSyncExternalStore(subscribe, readBusyTopBar);
 
 export const useHelpAccess = (): HelpAccess => {
@@ -255,25 +296,25 @@ export const useHelpPanelWidth = (frameSides: number): string => {
   const id = useHelpPanelId();
   const { panelWidth, framePadding } = useHelpDesign();
   const layout: HelpPanelLayout = HELP_PANELS.find((panel) => panel.id === id)?.layout ?? 'push';
-  if (layout !== 'auto') {
+  if (!docksWhenWide(layout)) {
     return `${panelWidth}px`;
   }
   const spare = `calc(100vw - var(--side-panel-navigation-width) - ${PAGE_FULL_WIDTH + frameSides}px)`;
   return `clamp(${panelWidth}px, ${spare}, ${HELP_FRAME_MAX_WIDTH + 2 * framePadding}px)`;
 };
 
+const hasRoomToDock = () => window.innerWidth >= DOCK_MIN_WIDTH;
+
 /** The picked panel's layout, with `auto` settled for the window's width. */
-export const useHelpPanelLayout = (): Exclude<HelpPanelLayout, 'auto'> => {
+export const useHelpPanelLayout = (): 'push' | 'float' | 'window' => {
   const id = useHelpPanelId();
-  const { panelWidth } = useHelpDesign();
-  const dockMinWidth = DOCK_MIN_WIDTH + panelWidth - HELP_DESIGNS[0].panelWidth;
-  const roomToDock = useSyncExternalStore(
-    subscribeToWidth,
-    () => window.innerWidth >= dockMinWidth,
-  );
+  const roomToDock = useSyncExternalStore(subscribeToWidth, hasRoomToDock);
   const layout: HelpPanelLayout = HELP_PANELS.find((panel) => panel.id === id)?.layout ?? 'push';
   if (layout === 'auto') {
     return roomToDock ? 'push' : 'float';
+  }
+  if (layout === 'auto-window') {
+    return roomToDock ? 'push' : 'window';
   }
   return layout;
 };

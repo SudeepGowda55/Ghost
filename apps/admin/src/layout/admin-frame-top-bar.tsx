@@ -12,7 +12,7 @@ import {
 import { type FrameMrr, type FrameStat, useFrameStats } from './use-frame-stats';
 // SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
 import { useFeatureFlag } from '@tryghost/admin-x-framework/hooks';
-import { useBusyTopBar, useHelpAccess } from '@/shaping/concepts';
+import { useBusyTopBar, useHelpAccess, useTopBarSlim } from '@/shaping/concepts';
 
 // Small caps, as in the Admin 7 vision
 const LABEL = 'text-[10px] leading-none font-medium tracking-[0.04em] uppercase';
@@ -83,7 +83,7 @@ function PlaceTab({ to, active, shortcut, className, children }: PlaceTabProps) 
 function SearchPill() {
   const openGlobalSearch = useOpenGlobalSearch();
   // SHAPING PROTOTYPE ONLY: narrower in the slim top bar
-  const { slim } = useHelpAccess();
+  const slim = useTopBarSlim();
 
   if (!openGlobalSearch) {
     return null;
@@ -92,7 +92,7 @@ function SearchPill() {
   return (
     <button
       className={cn(
-        slim ? 'max-w-[400px]' : 'max-w-[480px]',
+        slim ? 'max-w-[300px]' : 'max-w-[480px]',
         'flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 backdrop-blur-sm transition-colors hover:bg-white/10',
         'shadow-[inset_0_1px_0_color-mix(in_oklab,var(--color-white)_8%,transparent),inset_0_-1px_0_color-mix(in_oklab,var(--color-black)_20%,transparent)]',
       )}
@@ -118,7 +118,7 @@ function Clock() {
 
   // SHAPING PROTOTYPE ONLY: a short month in the slim top bar, which is
   // narrower, so it sheds the date and time later
-  const { slim } = useHelpAccess();
+  const slim = useTopBarSlim();
   const date = now.toLocaleDateString('en-US', {
     month: slim ? 'short' : 'long',
     day: 'numeric',
@@ -217,7 +217,7 @@ function SiteNumbers() {
   const busy = useBusyTopBar();
   const stats = busy ? BUSY_STATS : siteStats;
   // SHAPING PROTOTYPE ONLY: the slim top bar abbreviates long numbers
-  const { slim } = useHelpAccess();
+  const slim = useTopBarSlim();
   const formatCount = slim ? formatSlimCount : formatNumber;
 
   return (
@@ -319,8 +319,9 @@ function HelpLink() {
  * - below 960px the time goes
  * - below 900px Online is its dot and number
  *
- * The slim top bar (access point B) has less on its right, so search stops at
- * 400px and each of those steps comes later: 960px, 900px and 850px.
+ * The slim top bar (which the hybrid switches to below 1600px) has less on its
+ * right, and search stops at 300px, so each of those steps comes later: 960px,
+ * 900px and 850px.
  */
 export function AdminFrameTopBar({ hidden = false }: { hidden?: boolean }) {
   const { pathname } = useLocation();
@@ -329,14 +330,14 @@ export function AdminFrameTopBar({ hidden = false }: { hidden?: boolean }) {
   // Closed around a full-screen surface, nothing shows where they'd lead
   usePlaceShortcuts(!hidden);
   // SHAPING PROTOTYPE ONLY
-  const { slim } = useHelpAccess();
+  const slim = useTopBarSlim();
 
   return (
     <div
       className={cn(
         'grid h-full items-center gap-x-6 whitespace-nowrap',
         slim
-          ? 'grid-cols-[minmax(max-content,1fr)_minmax(0,400px)_minmax(max-content,1fr)]'
+          ? 'grid-cols-[minmax(max-content,1fr)_minmax(0,300px)_minmax(max-content,1fr)]'
           : 'grid-cols-[minmax(max-content,1fr)_minmax(0,480px)_minmax(max-content,1fr)]',
       )}
       data-testid="admin-frame-top-bar"

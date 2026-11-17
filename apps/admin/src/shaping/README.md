@@ -29,11 +29,12 @@ was, and is remembered in this browser.
 
 **Layout**: how Help's panel sits with the page.
 
-| Option   | The panel                                                                                                                                                                                                         |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current  | Beside the page, which gets narrower                                                                                                                                                                              |
-| Window   | A smaller card in the bottom-right corner                                                                                                                                                                         |
-| Floating | A full-height card over the right of the page; from 1800px wide there's room, and it docks beside the page. Docked, it grows into the space a wider window leaves beside the page, up to 639px (655px with Roomy) |
+| Option   | The panel                                                                                                                                                                                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current  | Beside the page, which gets narrower                                                                                                                                                                                                                          |
+| Window   | A smaller card in the bottom-right corner                                                                                                                                                                                                                     |
+| Floating | A full-height card over the right of the page; from 1600px wide (Shade's `xxxl` breakpoint) it docks beside the page, which is squeezed a little there. Docked, it grows into the space a wider window leaves beside the page, up to 639px (655px with Roomy) |
+| Hybrid   | As Floating from 1600px wide: docked beside the page. Below that, the Window's smaller card in the bottom-right corner, not the full-height one                                                                                                               |
 
 An always-floating full-height panel was tried and dropped: docking when
 there's room does the same on narrow windows and better on wide ones.
@@ -56,19 +57,19 @@ Help is a page from another site in a frame, with a 16px gutter of its own
 that Admin can't change. Roomy adds 8px around the frame to make 24px. A true
 24px gutter is a change to the Help app (`TryGhost/support-app`), where its
 dividers and scrollbar would still reach the panel's edge; here they stop 8px
-short. Floating docks from 1884px with Roomy, as the wider panel
-needs that much more.
+short.
 
 **Access**: where Help is opened from. The panel shows where it can be
 opened from, so the access point also decides which screens it shows on.
 
-| Option       | Help is in                                                                                                                                   | The panel shows                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Current      | The main navigation (the account menu in Admin 7)                                                                                            | Where the main navigation does: not Settings or the editor |
-| Top bar      | The Admin 7 top bar, in place of the account menu. Classic Admin keeps the main navigation's link and adds one under the Settings navigation | On every desktop screen                                    |
-| Top bar slim | As Top bar, with a calmer Admin 7 top bar: a short month (Nov), long numbers abbreviated (128k), and search up to 400px wide, not 480px      | On every desktop screen                                    |
+| Option         | Help is in                                                                                                                                   | The panel shows                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Current        | The main navigation (the account menu in Admin 7)                                                                                            | Where the main navigation does: not Settings or the editor |
+| Top bar        | The Admin 7 top bar, in place of the account menu. Classic Admin keeps the main navigation's link and adds one under the Settings navigation | On every desktop screen                                    |
+| Top bar slim   | As Top bar, with a calmer Admin 7 top bar: a short month (Nov), long numbers abbreviated (128k), and search up to 300px wide, not 480px      | On every desktop screen                                    |
+| Top bar hybrid | As Top bar from 1600px wide (Shade's `xxxl` breakpoint), where the full top bar still keeps search centred; as Top bar slim below that       | On every desktop screen                                    |
 
-The editor has no Help link of its own yet; with either Top bar option, Help opened
+The editor has no Help link of its own yet; with any Top bar option, Help opened
 before going there stays open.
 
 **Conditions**: what a site would need set up, faked to judge an option at its

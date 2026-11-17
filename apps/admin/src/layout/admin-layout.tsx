@@ -1,7 +1,13 @@
 import { ActivityPubHostLayoutProvider } from '@tryghost/activitypub/api';
 import React from 'react';
 import { useLocation } from '@tryghost/admin-x-framework';
-import { FLOATING_SIDEBAR_SPRING, SidebarInset, SidebarProvider } from '@tryghost/shade/components';
+import {
+  FLOATING_SIDEBAR_INSET,
+  FLOATING_SIDEBAR_SPRING,
+  getFloatingSidebarGapWidth,
+  SidebarInset,
+  SidebarProvider,
+} from '@tryghost/shade/components';
 import { PageChromeProvider } from '@tryghost/shade/page-templates';
 import { useCurrentUser } from '@tryghost/admin-x-framework/api/current-user';
 import { isContributorUser } from '@tryghost/admin-x-framework/api/users';
@@ -484,6 +490,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             // option can widen, and the Floating layout grows on a wide
             // window. On main it's the navigation's.
             '--side-panel-width': helpPanelWidth,
+            // SHAPING PROTOTYPE ONLY: how far short of the page's left edge
+            // the expanded panel stops in the prototype's layouts. In Admin 7
+            // that's the pinned navigation's footprint (its capsule and the
+            // 16px either side of it), so the space around the capsule is
+            // even. Classic Admin's navigation fills its column; a floating
+            // panel keeps its own gap from it.
+            '--side-panel-full-clear': framed
+              ? `${getFloatingSidebarGapWidth(true, ADMIN7_SIDEBAR_WIDTH)}px`
+              : SIDEBAR_WIDTH,
+            '--side-panel-float-clear': framed
+              ? `${getFloatingSidebarGapWidth(true, ADMIN7_SIDEBAR_WIDTH)}px`
+              : `calc(${SIDEBAR_WIDTH} + ${FLOATING_SIDEBAR_INSET}px)`,
           } as React.CSSProperties
         }
       >

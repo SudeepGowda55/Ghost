@@ -11,7 +11,8 @@ import { Stack } from '@tryghost/shade/primitives';
 import { cn, LucideIcon } from '@tryghost/shade/utils';
 // SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
 import { useFeatureFlag } from '@tryghost/admin-x-framework/hooks';
-import { useHelpAccess } from '@/shaping/concepts';
+import { useHelpAccess, useHelpSettingsPlaceId } from '@/shaping/concepts';
+import { SettingsHelpButton } from '@/shaping/settings-help-button';
 import { NavMenuItem } from './nav-menu-item';
 
 const FADE_HEIGHT = 48;
@@ -89,13 +90,17 @@ function SettingsNavigationFade({ slot }: { slot: HTMLElement | null }) {
 function SettingsHelpLink() {
   const inAppSupport = useFeatureFlag('inAppSupport');
   const { topBar } = useHelpAccess();
+  // Or as a floating button in the navigation's corner (see shaping/settings-help-button.tsx)
+  const place = useHelpSettingsPlaceId();
 
-  if (!inAppSupport || !topBar) {
+  if (!inAppSupport || !topBar || place !== 'footer') {
     return null;
   }
 
   return (
-    <SidebarGroup className="shrink-0 border-t border-border">
+    // The Settings navigation's own side padding (px-5 in settings/layout/sidebar.tsx),
+    // so Help lines up with the items above it
+    <SidebarGroup className="shrink-0 border-t border-border px-5">
       <SidebarGroupContent>
         <SidebarMenu>
           <NavMenuItem>
@@ -142,6 +147,7 @@ const SettingsSidebar = React.forwardRef<HTMLDivElement, SettingsSidebarProps>(
           <SettingsNavigationFade slot={slot} />
         </SidebarContent>
         <SettingsHelpLink />
+        <SettingsHelpButton />
       </Sidebar>
     );
   },

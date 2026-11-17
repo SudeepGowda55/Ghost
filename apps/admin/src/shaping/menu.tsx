@@ -14,17 +14,21 @@ import {
   HELP_ACCESS_POINTS,
   HELP_DESIGNS,
   HELP_PANELS,
+  HELP_SETTINGS_PLACES,
   type HelpAccessId,
   type HelpDesignId,
   type HelpPanelId,
+  type HelpSettingsPlaceId,
   setBusyTopBar,
   setHelpAccess,
   setHelpDesign,
   setHelpPanel,
+  setHelpSettingsPlace,
   useBusyTopBar,
   useHelpAccessId,
   useHelpDesignId,
   useHelpPanelId,
+  useHelpSettingsPlaceId,
 } from './concepts';
 
 // SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
@@ -117,20 +121,23 @@ export const ShapingMenu: React.FC = () => {
   const panel = useHelpPanelId();
   const design = useHelpDesignId();
   const access = useHelpAccessId();
+  const settingsPlace = useHelpSettingsPlaceId();
   const busyTopBar = useBusyTopBar();
 
   return (
     <ShadeApp className="shade-admin" darkMode={dark}>
-      {/* Kept tight to the corner: Help can sit under it, and the square takes
-          the pointer from whatever it covers */}
-      <div className="group/proto fixed right-0 bottom-0 z-[60] flex size-12 items-end justify-end p-1.5">
+      {/* The hover target: a sliver in the very corner, so it takes the pointer
+          from as little as it can of what sits there (Help's window, or its
+          floating button in classic Settings). The beaker is larger than it,
+          and only takes the pointer once it shows. */}
+      <div className="group/proto fixed right-0 bottom-0 z-[60] size-6">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               aria-label="Prototype"
               className={cn(
-                'bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover/proto:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none',
-                open && 'bg-muted opacity-100',
+                'pointer-events-none absolute right-1.5 bottom-1.5 bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover/proto:pointer-events-auto group-hover/proto:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 motion-reduce:transition-none',
+                open && 'pointer-events-auto bg-muted opacity-100',
               )}
               size="icon"
               type="button"
@@ -161,6 +168,12 @@ export const ShapingMenu: React.FC = () => {
                 title="Access"
                 value={access}
                 onChange={(id) => setHelpAccess(id as HelpAccessId)}
+              />
+              <Options
+                options={HELP_SETTINGS_PLACES}
+                title="Classic settings"
+                value={settingsPlace}
+                onChange={(id) => setHelpSettingsPlace(id as HelpSettingsPlaceId)}
               />
               {/* What the site would need set up, faked to judge an option at its busiest */}
               <Section title="Conditions">

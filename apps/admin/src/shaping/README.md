@@ -72,6 +72,11 @@ opened from, so the access point also decides which screens it shows on.
 The editor has no Help link of its own yet; with any Top bar option, Help opened
 before going there stays open.
 
+**Classic settings**: where Help goes in classic Admin's Settings, which has
+no top bar, with any access point but Current. **Menu footer** is a link under
+the Settings navigation; **Floating button** is a round Help button in the
+bottom-right corner of the Settings navigation (`settings-help-button.tsx`).
+
 **Conditions**: what a site would need set up, faked to judge an option at its
 busiest. **Busy top bar** (on by default) shows sample Online, Members and MRR
 numbers in the Admin 7 top bar. The real top bar only shows Online with web

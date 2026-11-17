@@ -183,6 +183,19 @@ export const TOP_BAR_SLIM_BELOW = 1600;
 export type HelpAccessId = (typeof HELP_ACCESS_POINTS)[number]['id'];
 
 /**
+ * Where Help goes in classic Admin's Settings, which has no top bar and swaps
+ * the main navigation for its own: a link under the Settings navigation, or a
+ * floating button in the page's bottom-right corner. Used with any access
+ * point but Current.
+ */
+export const HELP_SETTINGS_PLACES = [
+  { id: 'footer', label: 'Menu footer' },
+  { id: 'floating', label: 'Floating button' },
+] as const;
+
+export type HelpSettingsPlaceId = (typeof HELP_SETTINGS_PLACES)[number]['id'];
+
+/**
  * From this window width the panel docks beside the page, in every design:
  * Shade's `xxxl` breakpoint. The page is squeezed some beside it there, to
  * about 880px of content beside main's panel and 800px beside a Roomy one,
@@ -194,6 +207,7 @@ export const DOCK_MIN_WIDTH = 1600;
 const PANEL_KEY = 'shaping.help.panel';
 const DESIGN_KEY = 'shaping.help.design';
 const ACCESS_KEY = 'shaping.help.access';
+const SETTINGS_PLACE_KEY = 'shaping.help.settingsPlace';
 const CHANGE_EVENT = 'shaping:help-change';
 
 const read = <Id extends string>(key: string, options: readonly { id: Id }[]): Id => {
@@ -217,10 +231,13 @@ const write = (key: string, id: string) => {
 const readPanelId = () => read<HelpPanelId>(PANEL_KEY, HELP_PANELS);
 const readDesignId = () => read<HelpDesignId>(DESIGN_KEY, HELP_DESIGNS);
 const readAccessId = () => read<HelpAccessId>(ACCESS_KEY, HELP_ACCESS_POINTS);
+const readSettingsPlaceId = () =>
+  read<HelpSettingsPlaceId>(SETTINGS_PLACE_KEY, HELP_SETTINGS_PLACES);
 
 export const setHelpPanel = (id: HelpPanelId) => write(PANEL_KEY, id);
 export const setHelpDesign = (id: HelpDesignId) => write(DESIGN_KEY, id);
 export const setHelpAccess = (id: HelpAccessId) => write(ACCESS_KEY, id);
+export const setHelpSettingsPlace = (id: HelpSettingsPlaceId) => write(SETTINGS_PLACE_KEY, id);
 
 // Site conditions the prototype fakes, to judge an option at its busiest.
 //
@@ -248,6 +265,7 @@ const subscribe = (onChange: () => void) => {
 export const useHelpPanelId = () => useSyncExternalStore(subscribe, readPanelId);
 export const useHelpDesignId = () => useSyncExternalStore(subscribe, readDesignId);
 export const useHelpAccessId = () => useSyncExternalStore(subscribe, readAccessId);
+export const useHelpSettingsPlaceId = () => useSyncExternalStore(subscribe, readSettingsPlaceId);
 
 export const useHelpDesign = (): HelpDesign => {
   const id = useHelpDesignId();

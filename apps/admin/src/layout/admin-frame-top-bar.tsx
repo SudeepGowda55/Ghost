@@ -10,6 +10,9 @@ import {
   useIsCustomizingSite,
 } from '@/view-site/api';
 import { type FrameMrr, type FrameStat, useFrameStats } from './use-frame-stats';
+// SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
+import { useFeatureFlag } from '@tryghost/admin-x-framework/hooks';
+import { useBusyTopBar, useHelpAccess } from '@/shaping/concepts';
 
 // Small caps, as in the Admin 7 vision
 const LABEL = 'text-[10px] leading-none font-medium tracking-[0.04em] uppercase';
@@ -79,6 +82,8 @@ function PlaceTab({ to, active, shortcut, className, children }: PlaceTabProps) 
 
 function SearchPill() {
   const openGlobalSearch = useOpenGlobalSearch();
+  // SHAPING PROTOTYPE ONLY: narrower in the slim top bar
+  const { slim } = useHelpAccess();
 
   if (!openGlobalSearch) {
     return null;
@@ -87,7 +92,8 @@ function SearchPill() {
   return (
     <button
       className={cn(
-        'flex h-7 w-full max-w-[480px] cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 backdrop-blur-sm transition-colors hover:bg-white/10',
+        slim ? 'max-w-[400px]' : 'max-w-[480px]',
+        'flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 backdrop-blur-sm transition-colors hover:bg-white/10',
         'shadow-[inset_0_1px_0_color-mix(in_oklab,var(--color-white)_8%,transparent),inset_0_-1px_0_color-mix(in_oklab,var(--color-black)_20%,transparent)]',
       )}
       title="Search"
@@ -95,8 +101,8 @@ function SearchPill() {
       onClick={openGlobalSearch}
     >
       <LucideIcon.Search className={cn('size-3.5 shrink-0', MUTED)} strokeWidth={1.75} />
-      <span className={cn('flex-1 text-left', LABEL, MUTED)}>Search</span>
-      <span className={cn(LABEL, MUTED)}>{searchShortcutLabel}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-left', LABEL, MUTED)}>Search</span>
+      <span className={cn('shrink-0', LABEL, MUTED)}>{searchShortcutLabel}</span>
     </button>
   );
 }
@@ -110,13 +116,29 @@ function Clock() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const date = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  // SHAPING PROTOTYPE ONLY: a short month in the slim top bar, which is
+  // narrower, so it sheds the date and time later
+  const { slim } = useHelpAccess();
+  const date = now.toLocaleDateString('en-US', {
+    month: slim ? 'short' : 'long',
+    day: 'numeric',
+  });
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
 
   return (
-    <div className={cn('flex items-center gap-2', LABEL, MUTED)}>
-      <span>{date}</span>
+    // SHAPING PROTOTYPE ONLY: the first to go as the bar narrows (see AdminFrameTopBar)
+    <div
+      className={cn(
+        'hidden items-center gap-2',
+        slim ? 'min-[900px]:flex' : 'min-[960px]:flex',
+        LABEL,
+        MUTED,
+      )}
+    >
+      <span className={cn('hidden', slim ? 'min-[960px]:inline' : 'min-[1040px]:inline')}>
+        {date}
+      </span>
       <time dateTime={now.toISOString()}>
         {hours}
         <span className="motion-safe:animate-[admin-frame-blink_1s_infinite]">:</span>
@@ -144,6 +166,34 @@ function formatMrr({ amount, currency }: FrameMrr): string {
   }
 }
 
+// SHAPING PROTOTYPE ONLY: the slim top bar's numbers, long ones abbreviated to
+// whole thousands or millions (128k, 1k), without the decimal Shade's
+// abbreviateNumber keeps. The bar's labels are capitals, so the numbers opt
+// out to keep the small k.
+const SLIM_NUMBER = 'normal-case';
+
+function formatSlimCount(count: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 0 })
+    .format(count)
+    .replace('K', 'k');
+}
+
+function formatSlimMrr({ amount, currency }: FrameMrr): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+      notation: 'compact',
+      maximumFractionDigits: 0,
+    })
+      .format(amount / 100)
+      .replace('K', 'k');
+  } catch {
+    // Not a currency Intl knows
+    return `${formatSlimCount(Math.round(amount / 100))} ${currency.toUpperCase()}`;
+  }
+}
+
 function Stat({ label, to, children }: { label: string; to: string; children: React.ReactNode }) {
   return (
     <Link className={cn('group flex h-full items-center gap-1', LABEL)} to={to}>
@@ -153,29 +203,53 @@ function Stat({ label, to, children }: { label: string; to: string; children: Re
   );
 }
 
+// SHAPING PROTOTYPE ONLY: the top bar at its busiest, each number a long one
+const BUSY_STATS = {
+  online: 1284,
+  members: 128450,
+  mrr: { amount: 4825000, currency: 'usd' },
+};
+
 /** The time, and the site's numbers linking to Analytics */
 function SiteNumbers() {
-  const stats = useFrameStats();
+  const siteStats = useFrameStats();
+  // SHAPING PROTOTYPE ONLY: sample numbers, so all three show (see shaping/concepts.ts)
+  const busy = useBusyTopBar();
+  const stats = busy ? BUSY_STATS : siteStats;
+  // SHAPING PROTOTYPE ONLY: the slim top bar abbreviates long numbers
+  const { slim } = useHelpAccess();
+  const formatCount = slim ? formatSlimCount : formatNumber;
 
   return (
     <>
       <Clock />
       {stats.online !== null && (
-        <Link className={cn('group flex h-full items-center gap-2', LABEL)} to="/analytics">
-          <span aria-hidden="true" className="block size-2 bg-green" />
+        <Link
+          className={cn('group flex h-full items-center gap-2', LABEL)}
+          title="Online"
+          to="/analytics"
+        >
+          <span aria-hidden="true" className="block size-2 shrink-0 bg-green" />
           <span className={cn('transition-colors group-hover:text-white', MUTED)}>
-            {statText(stats.online, formatNumber)} Online
+            <span className={cn(slim && SLIM_NUMBER)}>{statText(stats.online, formatCount)}</span>
+            {/* SHAPING PROTOTYPE ONLY: the dot stands for it on a narrow bar */}
+            <span className={cn('hidden', slim ? 'min-[850px]:inline' : 'min-[900px]:inline')}>
+              {' '}
+              Online
+            </span>
           </span>
         </Link>
       )}
       {stats.members !== null && (
         <Stat label="Members" to="/analytics/growth">
-          {statText(stats.members, formatNumber)}
+          <span className={cn(slim && SLIM_NUMBER)}>{statText(stats.members, formatCount)}</span>
         </Stat>
       )}
       {stats.mrr !== null && (
         <Stat label="MRR" to="/analytics/growth?tab=mrr">
-          {statText(stats.mrr, formatMrr)}
+          <span className={cn(slim && SLIM_NUMBER)}>
+            {statText(stats.mrr, slim ? formatSlimMrr : formatMrr)}
+          </span>
         </Stat>
       )}
     </>
@@ -202,10 +276,51 @@ function CustomizeToggle() {
 }
 
 /**
+ * SHAPING PROTOTYPE ONLY: Help in the top bar, which shows on every screen the
+ * frame does, Settings included. Marked for the Help app as the other Help
+ * links are, so it opens and closes the panel.
+ */
+function HelpLink() {
+  const inAppSupport = useFeatureFlag('inAppSupport');
+  const { topBar } = useHelpAccess();
+
+  if (!inAppSupport || !topBar) {
+    return null;
+  }
+
+  return (
+    <a
+      aria-label="Help"
+      className={cn('flex h-full items-center transition-colors hover:text-white', MUTED)}
+      data-ghost-help=""
+      href="https://ghost.org/help?utm_source=admin&utm_campaign=help"
+      rel="noopener noreferrer"
+      target="_blank"
+      title="Help"
+    >
+      <LucideIcon.HelpCircle className="size-4" strokeWidth={2} />
+    </a>
+  );
+}
+
+/**
  * The frame's top bar: places on the left, search in the middle, and the
- * time and the site's numbers on the right. A three-column grid, so search
- * stays centred whatever is either side of it. On View site, the right side
+ * time and the site's numbers on the right. On View site, the right side
  * customizes the site's design instead.
+ *
+ * SHAPING PROTOTYPE ONLY: main's three equal columns let a full right side run
+ * under search from about 1450px down. Here each side is as wide as what's in
+ * it, and search fills what's left between them, up to 480px, with a gutter
+ * either side. With room to spare the sides are equal, so search is centred;
+ * with less it sits off centre, then narrows. As the bar narrows further the
+ * right side sheds what matters least, so search keeps a usable width down to
+ * 800px, where the bar gives way to the mobile layout:
+ * - below 1040px the date goes
+ * - below 960px the time goes
+ * - below 900px Online is its dot and number
+ *
+ * The slim top bar (access point B) has less on its right, so search stops at
+ * 400px and each of those steps comes later: 960px, 900px and 850px.
  */
 export function AdminFrameTopBar({ hidden = false }: { hidden?: boolean }) {
   const { pathname } = useLocation();
@@ -213,9 +328,19 @@ export function AdminFrameTopBar({ hidden = false }: { hidden?: boolean }) {
   const canCustomize = useCanCustomizeSite();
   // Closed around a full-screen surface, nothing shows where they'd lead
   usePlaceShortcuts(!hidden);
+  // SHAPING PROTOTYPE ONLY
+  const { slim } = useHelpAccess();
 
   return (
-    <div className="grid h-full grid-cols-3 items-center" data-testid="admin-frame-top-bar">
+    <div
+      className={cn(
+        'grid h-full items-center gap-x-6 whitespace-nowrap',
+        slim
+          ? 'grid-cols-[minmax(max-content,1fr)_minmax(0,400px)_minmax(max-content,1fr)]'
+          : 'grid-cols-[minmax(max-content,1fr)_minmax(0,480px)_minmax(max-content,1fr)]',
+      )}
+      data-testid="admin-frame-top-bar"
+    >
       <nav aria-label="Places" className="flex h-full items-center gap-6 pl-6">
         <PlaceTab active={!isViewSite} className="font-semibold" shortcut="Option + 1" to="/">
           Ghost
@@ -224,11 +349,12 @@ export function AdminFrameTopBar({ hidden = false }: { hidden?: boolean }) {
           View site
         </PlaceTab>
       </nav>
-      <div className="flex justify-center">
+      <div className="flex min-w-0 justify-center">
         <SearchPill />
       </div>
       <div className="flex h-full items-center justify-end gap-5 pr-6">
         {isViewSite && canCustomize ? <CustomizeToggle /> : <SiteNumbers />}
+        <HelpLink />
       </div>
     </div>
   );

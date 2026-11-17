@@ -1,8 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Sidebar, SidebarContent } from '@tryghost/shade/components';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+} from '@tryghost/shade/components';
 import { Stack } from '@tryghost/shade/primitives';
-import { cn } from '@tryghost/shade/utils';
+import { cn, LucideIcon } from '@tryghost/shade/utils';
+// SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
+import { useFeatureFlag } from '@tryghost/admin-x-framework/hooks';
+import { useHelpAccess } from '@/shaping/concepts';
+import { NavMenuItem } from './nav-menu-item';
 
 const FADE_HEIGHT = 48;
 
@@ -71,6 +81,40 @@ function SettingsNavigationFade({ slot }: { slot: HTMLElement | null }) {
   );
 }
 
+/**
+ * SHAPING PROTOTYPE ONLY: Help under the Settings navigation, where the main
+ * navigation's Help link is out of reach. Marked for the Help app as that
+ * link is.
+ */
+function SettingsHelpLink() {
+  const inAppSupport = useFeatureFlag('inAppSupport');
+  const { topBar } = useHelpAccess();
+
+  if (!inAppSupport || !topBar) {
+    return null;
+  }
+
+  return (
+    <SidebarGroup className="shrink-0 border-t border-border">
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <NavMenuItem>
+            <NavMenuItem.Link
+              data-ghost-help=""
+              rel="noopener noreferrer"
+              target="_blank"
+              to="https://ghost.org/help?utm_source=admin&utm_campaign=help"
+            >
+              <LucideIcon.HelpCircle />
+              <NavMenuItem.Label>Help</NavMenuItem.Label>
+            </NavMenuItem.Link>
+          </NavMenuItem>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 interface SettingsSidebarProps extends React.ComponentProps<typeof Sidebar> {
   slotRef: (element: HTMLDivElement | null) => void;
 }
@@ -97,6 +141,7 @@ const SettingsSidebar = React.forwardRef<HTMLDivElement, SettingsSidebarProps>(
           <Stack ref={handleSlotRef} className="min-h-0 flex-1" gap="none" />
           <SettingsNavigationFade slot={slot} />
         </SidebarContent>
+        <SettingsHelpLink />
       </Sidebar>
     );
   },

@@ -30,6 +30,8 @@ import { AdminFrameTopBar } from './admin-frame-top-bar';
 import { FloatingSidebarContentSync } from './floating-sidebar-content-sync';
 import { GlobalSearchProvider } from '@/global-search/global-search-provider';
 import { SidePanel } from './side-panel/side-panel';
+// SHAPING PROTOTYPE ONLY — never merge (see src/shaping/README.md).
+import { useHelpAccess, useHelpPanelLayout, useHelpPanelWidth } from '@/shaping/concepts';
 
 const networkPageChrome = {
   contentClassName: 'max-w-[1920px]',
@@ -144,6 +146,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const isMobile = useIsMobile();
   const admin7Design = useFeatureFlag('admin7Design');
   const isViewSiteRoute = useLocation().pathname === '/site';
+  // SHAPING PROTOTYPE ONLY
+  const helpAccess = useHelpAccess();
+  const helpPanelLayout = useHelpPanelLayout();
 
   // With admin7Design, the desktop page sits inside a frame: a top bar and
   // thin bezels around a rounded card. View site becomes a place of its own,
@@ -160,6 +165,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   } else if (isViewSiteRoute) {
     frameMode = 'site';
   }
+  // SHAPING PROTOTYPE ONLY: the frame's 8px bezels either side of the page and
+  // beside the panel
+  const helpPanelWidth = useHelpPanelWidth(frameMode === 'full' ? 24 : 0);
   const sidebarClassName = cn(
     SIDEBAR_PANEL_CLASS_NAME,
     SIDEBAR_SCREEN_TRANSITION_CLASS_NAME,
@@ -433,11 +441,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   // below the top bar, and otherwise runs the full height on the right. It
   // stays in one place across the mobile breakpoint, so its content isn't
   // reloaded.
+  //
+  // SHAPING PROTOTYPE ONLY: an access point within reach on other screens lets
+  // it show on every desktop screen, and a panel option can float it over the
+  // page instead (see shaping/concepts.ts).
   const sidePanel = (
     <SidePanel
       framed={adminFrame}
+      layout={helpPanelLayout}
       locked={dunningLocked}
-      visible={sidebarVisible && !isSettingsRoute && !isMobile}
+      visible={helpAccess.everywhere ? !isMobile : sidebarVisible && !isSettingsRoute && !isMobile}
     />
   );
 
@@ -447,7 +460,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   // squashed and laid out again on every frame. The width is worked out from
   // the viewport: the panel's, and in the frame its bezels and the panel's.
   const page = (
-    <div className="h-full w-[max(100%,calc(100vw_-_var(--side-panel-navigation-width)_-_3_*_var(--admin-frame-side)))]">
+    <div
+      className={cn(
+        'h-full w-[max(100%,calc(100vw_-_var(--side-panel-width)_-_3_*_var(--admin-frame-side)))]',
+        // SHAPING PROTOTYPE ONLY: keeps the page's own stacking (sticky headers
+        // are z-50) under a panel floating over it
+        helpPanelLayout !== 'push' && 'isolate',
+      )}
+    >
       {sidebarLayout}
     </div>
   );
@@ -457,7 +477,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       {!dunningLocked && <SkipLink target={mainRef} />}
       <div
         className="flex size-full"
-        style={{ '--side-panel-navigation-width': SIDEBAR_WIDTH } as React.CSSProperties}
+        style={
+          {
+            '--side-panel-navigation-width': SIDEBAR_WIDTH,
+            // SHAPING PROTOTYPE ONLY: the panel's own width, which the Design
+            // option can widen, and the Floating layout grows on a wide
+            // window. On main it's the navigation's.
+            '--side-panel-width': helpPanelWidth,
+          } as React.CSSProperties
+        }
       >
         <div className="h-full min-w-0 flex-1 overflow-hidden">
           {adminFrame ? (

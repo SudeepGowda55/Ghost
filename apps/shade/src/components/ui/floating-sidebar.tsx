@@ -423,9 +423,13 @@ const FloatingSidebar = React.forwardRef<HTMLDivElement, FloatingSidebarProps>(
       };
       const onPointerLeave = () => updateHover({ capsule: false, zone: false });
       document.addEventListener('pointermove', onPointerMove);
+      // The pointer moving into a frame, such as an app's page, is over it, though its moves
+      // there go to the frame's own document.
+      document.addEventListener('pointerover', onPointerMove);
       document.documentElement.addEventListener('pointerleave', onPointerLeave);
       return () => {
         document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerover', onPointerMove);
         document.documentElement.removeEventListener('pointerleave', onPointerLeave);
         window.clearTimeout(restTimer.current);
         hover.current.zone = false;

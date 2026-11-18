@@ -495,11 +495,62 @@ access, and `canThis` becomes an adapter over it.
   widening, errors, limit checks and `excludedAttrs`, and the endpoint keeps
   stripping `excludedAttrs` before the write. Rules are async, since they load
   the resource as the hooks do.
+- **Row filters.** A rule that limits which rows a principal may see also
+  returns a filter, so the limit applies to every query that selects rows,
+  not only to single rows. Today no hook limits a browse, since a browse has
+  no row for the hook to check, and the `enforcedFilters` on `Post`, `User`,
+  `Comment` and `Newsletter` depend on the context or query options, not the
+  principal.
+  - A rule has `filter?: (principal) => query` and `check?` for what a filter
+    cannot express. The filter is a Mongo-style query object, which is what
+    NQL parses a string into, written directly rather than as an NQL string.
+    It is typed per object type (`WhereInput<'post'>`) from the schema, the
+    model's `manyToMany` and `oneToOne` filter relations, and the filter key
+    allowlist. Those are the relation types `mongo-knex` compiles; it emits
+    no condition for others, such as `Post`'s `oneToMany` `post_revisions`,
+    so registering a filter that names one fails at boot rather than being
+    dropped at query time. The NQL packages ship no types; their
+    declarations go in `ghost/types/` beside `tryghost-mongo-knex.d.ts`.
+  - The filter is ANDed onto the query with a second
+    `mongoKnex(qb, filter, {relations})` call next to the model's
+    `nql(custom, …)` call, as `services/members-metafields/queries.ts`
+    already calls `mongo-knex` directly. The user's filter, defaults and
+    overrides are untouched, and pagination and counts stay correct. Filters
+    do not go through `enforcedFilters`: NQL's override merge drops the user's
+    statements on any key the override mentions instead of ANDing them, which
+    is why a public post browse ignores a user's `status:` today. NQL's
+    filter expansions do not apply, so filters use real columns and relation
+    paths.
+  - Every path that selects rows for a principal applies the filter, so each
+    carries the principal to the query: browse, read, edit and destroy, bulk
+    edit and bulk destroy (which select their rows with
+    `getFilteredCollectionQuery`), and the CSV export (which calls
+    `findPage` without a context today). A single-row action looks the row up
+    by id plus the filter and throws `NotFoundError` on a miss, as the hooks
+    do; it uses the same SQL as browse, so the two cannot disagree. A bulk
+    action affects only the rows the filter selects. Phase 4 (PLA-639)
+    lists the paths and tests each one.
+  - A relation path matches when some related row matches. A filter that
+    needs one related row to meet several conditions puts them in
+    `$elemMatch`, which `mongo-knex` compiles to one subquery. A negated
+    relation path gets its own subquery and compiles to `NOT IN`, so it
+    matches when no related row does.
+  - `check` keeps what concerns the payload or state beyond the row: status
+    changes a Contributor may not make, role assignment, limit checks and
+    `excludedAttrs`. An edit runs both.
+  - The filter key restrictions (`mongoTransformer`,
+    `restrictAdminApiQueryOptions`) become per principal: a scoped principal
+    filters and orders only on fields it may read, so a filter cannot reveal
+    a field the response strips. The transformer runs on the user's filter
+    before the rule's filter is added, so it never strips the rule's keys.
+  - Internal requests skip filters as they skip rules; Owner is filtered
+    wherever a rule narrows Owner.
 - **Relations.** Includes and relation filters check the related type's key
   against `scopes` (§3.3). The check runs where the API resolves includes and
   filters, which the Phase 4 spike locates, and reads `scopes` from
-  `capabilities`. It does not run the related type's row rule, and role
-  grants are not checked on includes, as today.
+  `capabilities`. The related type's row filter applies there too, so a row
+  it hides is neither included nor matched by a relation filter. Its `check`
+  does not run, and role grants are not checked on includes, as today.
 - **Unchanged.** Endpoint `permissions` configs and `unsafeAttrs` in
   `api/endpoints/`, `frame.options.context` (internal callers still pass
   `{internal: true}`), and the `canThis(context).edit.post(id, attrs)` call
@@ -1102,8 +1153,10 @@ Decided:
 - Access is decided in `auth/policy/` from the principal: role grants
   (Owner granted every key) and per-type row rules that replace model
   `permissible` hooks and may narrow or widen a grant, with the result capped
-  by token and app scopes. `canThis` is an adapter over it, not extended with
-  more actor flags (§3.6). Endpoint permission configs, `excludedAttrs` and
+  by token and app scopes. Row rules that limit visibility do it with a typed
+  Mongo-style filter, ANDed onto every query that selects rows for the
+  principal. `canThis` is an adapter over it, not extended with more actor flags
+  (§3.6). Endpoint permission configs, `excludedAttrs` and
   `frame.options.context` stay.
 - `user_accounts` is the only password store: the legacy engine moves to it in
   Phase 2 wherever it exists, and the migration that graduates it copies
@@ -1131,7 +1184,9 @@ Later, each an additive plugin: OAuth device-code flow for CLIs; staff sign-in
 audit trail from `databaseHooks.session.create.after`; multi-site staff
 identity with `organization`; identity tokens on `jwt` and member sign-in on
 `magicLink`/`emailOTP`; Content API keys as read-scoped tokens; audited
-support impersonation via `impersonatedBy`.
+support impersonation via `impersonatedBy`. An `and` option in `@tryghost/nql`,
+passed through by `@tryghost/bookshelf-filter`, could replace the second
+`mongoKnex` call for row filters (§3.6) once they have proved out.
 
 ## 12. File map
 
@@ -1143,6 +1198,7 @@ New (under `ghost/core/server` unless stated):
 - `auth/principal.ts`, `auth/resolve-principal.ts`
 - `auth/policy/scopes.ts`, `token-policy.ts`, `capabilities.ts`,
   `authorize.ts`, `rules/`
+- `ghost/types/` declarations for `@tryghost/nql` and `@tryghost/mongo-knex`
 - `data/migrations/versions/<next>/…` as tables graduate
 - `apps/admin-x-framework/src/auth/`, `src/api/personal-access-tokens.ts`
 - `apps/admin/src/auth/client/better-auth-client.ts`

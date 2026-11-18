@@ -182,14 +182,16 @@ export function useHostedModal<T extends HTMLElement>(
     latest.current = { overlay, hosted, tint };
   });
   // The caller's ref gets the element as React would give it: a new ref takes it over from the
-  // one before.
+  // one before. While the content isn't mounted, neither ref has it, so neither is called.
   const content = React.useRef<T | null>(null);
   const attached = React.useRef(forwardedRef);
   React.useLayoutEffect(() => {
     if (attached.current !== forwardedRef) {
-      setRef(attached.current, null);
+      if (content.current) {
+        setRef(attached.current, null);
+        setRef(forwardedRef, content.current);
+      }
       attached.current = forwardedRef;
-      setRef(forwardedRef, content.current);
     }
   }, [forwardedRef]);
   const cleanup = React.useRef<() => void>(undefined);

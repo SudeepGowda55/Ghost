@@ -441,6 +441,30 @@ describe('a dialog in an app’s overlay', () => {
     expect(fake.holds[0].released).toBe(false);
   });
 
+  it('calls a new callback ref only while the dialog’s content is mounted, as React would', async () => {
+    const calls: string[] = [];
+    const Probe = ({ open }: { open: boolean }) => (
+      <ShadeApp darkMode={false} overlay={fake.overlay}>
+        <Dialog open={open}>
+          <DialogContent ref={(element) => calls.push(element ? 'element' : 'null')}>
+            <DialogTitle>Title</DialogTitle>
+            <DialogDescription>Description</DialogDescription>
+          </DialogContent>
+        </Dialog>
+      </ShadeApp>
+    );
+    const { rerender } = render(<Probe open={false} />);
+
+    // A new inline ref on each render, while closed.
+    rerender(<Probe open={false} />);
+    rerender(<Probe open={false} />);
+    expect(calls).toEqual([]);
+
+    rerender(<Probe open />);
+    await screen.findByRole('dialog');
+    expect(calls).toEqual(['element']);
+  });
+
   it('renders in the page when the overlay has nowhere to render, and takes no hold', async () => {
     fake.container.remove();
     fake = fakeOverlay(false);

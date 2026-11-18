@@ -28,6 +28,27 @@ export { URL_MAX_LENGTH } from './manifest/limits.ts';
 export { isLocalhost } from './manifest/localhost.ts';
 export { isPlainText, toPlainText } from './plain-text.ts';
 export { appPageUrl, servedFrom } from './manifest/served-from.ts';
+export {
+  APP_RESOURCES,
+  APP_SCOPES,
+  APP_SCOPE_NAMES,
+  isAppScopeName,
+  type AppResource,
+  type AppResourceName,
+  type AppScope,
+  type AppScopeName,
+  type AppScopeNameOf,
+} from './scopes.ts';
+export {
+  compareAccess,
+  describeScopes,
+  widensAccess,
+  type AccessChange,
+  type AccessLine,
+  type AppAccess,
+  type AppAccessScope,
+  type AppAccessSource,
+} from './manifest/access.ts';
 export type {
   AppIcon,
   AppManifest,

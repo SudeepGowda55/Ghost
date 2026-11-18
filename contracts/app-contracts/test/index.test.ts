@@ -32,6 +32,9 @@ describe('the root entry point', () => {
       'APP_ERROR_CODES',
       'APP_FAILURE_CODES',
       'APP_ID_MAX_LENGTH',
+      'APP_RESOURCES',
+      'APP_SCOPES',
+      'APP_SCOPE_NAMES',
       'ARGUMENT_MESSAGES',
       'BRIDGE_ERROR_CODES',
       'CONNECT_MESSAGE_TYPE',
@@ -46,9 +49,12 @@ describe('the root entry point', () => {
       'UNCONFIRMED_APP_CODES',
       'URL_MAX_LENGTH',
       'appPageUrl',
+      'compareAccess',
       'decodeBridgeError',
+      'describeScopes',
       'encodeBridgeError',
       'isAppFailureCode',
+      'isAppScopeName',
       'isConnectMessage',
       'isContainedPath',
       'isFetchResponse',
@@ -66,6 +72,7 @@ describe('the root entry point', () => {
       'normaliseAppPath',
       'servedFrom',
       'toPlainText',
+      'widensAccess',
     ]);
   });
 

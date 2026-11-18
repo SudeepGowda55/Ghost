@@ -36,6 +36,7 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
     accent_color: '#ff5500',
     icon: { name: 'audio-lines' },
     surfaces: [{ type: 'admin_page', url: '/admin' }],
+    access: {},
     identity_key: keys.identity.publicJwk,
     backend_key: keys.backend.publicJwk,
     development: false,
@@ -204,7 +205,8 @@ describe('App installations Admin API', function () {
       const [stored] = await manifestRows();
       assert.equal(stored.installation_id, installation.id);
       assert.equal(stored.manifest_url, MANIFEST_URL);
-      assert.deepEqual(JSON.parse(stored.manifest), installation.manifest);
+      // Stored with access grouped by resource, as the developer wrote it.
+      assert.deepEqual(JSON.parse(stored.manifest), { ...installation.manifest, access: {} });
       assert.equal(stored.digest, installation.digest);
       assert.equal(Boolean(stored.requires_approval), false);
 

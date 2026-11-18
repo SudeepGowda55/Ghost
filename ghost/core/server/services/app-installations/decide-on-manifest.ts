@@ -1,4 +1,8 @@
-import { compareManifests } from '@tryghost/app-contracts/manifest';
+import {
+  compareManifests,
+  isAccessChange,
+  type FieldChange,
+} from '@tryghost/app-contracts/manifest';
 import type { AddedRow } from './app-installations-repository';
 import type { Installation } from './codec';
 import type { LoadedManifest } from './load-manifest';
@@ -23,10 +27,11 @@ export function changesFrom(approved: Approved, loaded: LoadedManifest): AppMani
 function compare(approved: Approved, loaded: LoadedManifest) {
   const { changes, requiresApproval } = compareManifests(approved.manifest, loaded.manifest);
   return {
-    changes: changes.map(({ path, requiresApproval: requires }) => ({
-      path,
-      requires_approval: requires,
-    })),
+    // Access changes still decide whether approval is needed, but aren't served until the
+    // installation stores and shows them.
+    changes: changes
+      .filter((change): change is FieldChange => !isAccessChange(change))
+      .map(({ path, requiresApproval: requires }) => ({ path, requires_approval: requires })),
     requiresApproval,
   };
 }

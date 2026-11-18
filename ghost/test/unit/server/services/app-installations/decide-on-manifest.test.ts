@@ -18,6 +18,7 @@ const approvedManifest: AppManifest = {
   accent_color: '#ff5500',
   icon: { name: 'audio-lines' },
   surfaces: [{ type: 'admin_page', url: 'https://podcast.example.com/admin' }],
+  access: [],
   manifest_url: MANIFEST_URL,
   identity_key: FIXTURE_IDENTITY_KEY,
   backend_key: FIXTURE_BACKEND_KEY,
@@ -33,7 +34,7 @@ const current = {
 /** A loaded manifest as the loader returns it, with a digest made from its contents. */
 function loaded(overrides: Partial<AppManifest> = {}): LoadedManifest {
   const manifest = { ...approvedManifest, ...overrides };
-  const serialised = JSON.stringify(manifest);
+  const serialised = JSON.stringify({ ...manifest, access: {} });
   return {
     manifestUrl: manifest.manifest_url,
     manifest,

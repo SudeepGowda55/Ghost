@@ -43,6 +43,7 @@ An app describes itself to Ghost in a JSON manifest, which it serves as a
   "accent_color": "#ff5500",
   "icon": { "name": "audio-lines" },
   "surfaces": [{ "type": "admin_page", "url": "/admin" }],
+  "access": { "post": { "scopes": [{ "name": "post:browse", "backend": true }, { "name": "post:edit" }] } },
   "manifest_url": "https://podcast.example.com/ghost-app.json",
   "identity_key": { "kty": "OKP", "crv": "Ed25519", "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo" },
   "backend_key": { "kty": "OKP", "crv": "Ed25519", "x": "H7aU67-okztSJD3-0znkVDiCU-izOI3I851CZX8XDyk" },
@@ -92,6 +93,19 @@ An app describes itself to Ghost in a JSON manifest, which it serves as a
   machine itself. A production site may run a development build to test it.
 - `surfaces` lists what the app asks for. Only `admin_page` exists today, at
   most once.
+- `access` lists the scopes the app needs, grouped by resource, and is
+  required; `{}` asks for nothing. Each key is a resource and each scope keeps
+  its full name, which must start with that key. A scope is an object, and
+  `backend: true` marks one the app's backend may use on its own, with nobody
+  present; it defaults to `false`. A resource lists at least one scope, and
+  duplicates, unknown names, wildcards, `optional` and `reason` are refused.
+  A parsed manifest holds access as one list of `{ name, backend }` in the
+  registry's order; `AppManifestSchema` writes it back grouped. The scopes,
+  their resources and the words Admin shows for them are in the scope
+  registry, `src/scopes.ts`, which the root entry point exports.
+  `compareManifests` compares access by meaning: a new scope, or one newly
+  marked for the backend, needs approval; a scope or resource removed, or
+  `backend` turned off, doesn't; reordering changes nothing.
 - URLs must be `https`. `localhost` and other addresses of the machine itself are
   accepted, over `http` too, only when Ghost runs in development. The manifest
   still can't be on Ghost's own host, on any port: serve the app from a name of

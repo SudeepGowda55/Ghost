@@ -6,6 +6,18 @@ import * as React from 'react';
  */
 export type AppOverlayTint = 'dialog' | 'sheet';
 
+const OVERLAY_TINTS: Record<AppOverlayTint, string> = {
+  dialog: 'bg-black/30 dark:bg-black/60',
+  sheet: 'bg-black/10',
+};
+
+/**
+ * The classes for the tint behind a modal: a dialog's or alert dialog's, or a sheet's, which is
+ * lighter. Ghost Admin draws the same tint behind an app's dialogs and sheets, so theirs always
+ * match Shade's own.
+ */
+export const overlayTint = (tint: AppOverlayTint) => OVERLAY_TINTS[tint];
+
 /** A dialog or sheet's hold on the overlay, from when it mounts until it unmounts. */
 export interface AppOverlayHold {
   /** True from when the dialog opens, false once it starts to close. */

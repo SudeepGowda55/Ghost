@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 
-import { useHostedModal, useModalOpen } from '@/lib/app-overlay';
+import { overlayTint, useHostedModal, useModalOpen } from '@/lib/app-overlay';
 import { cn } from '@/lib/utils';
 import type { ButtonProps } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -24,7 +24,8 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-[1100] transform-gpu bg-black/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 dark:bg-black/60',
+      'fixed inset-0 z-[1100] transform-gpu data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+      overlayTint('dialog'),
       className,
     )}
     {...props}

@@ -6,6 +6,7 @@ const saveMemberView = vi.fn();
 const deleteMemberView = vi.fn();
 
 vi.mock('@/members/hooks/use-member-views', () => ({
+  MEMBER_VIEW_NAME_MAX_LENGTH: 191,
   useSaveMemberView: () => saveMemberView,
   useDeleteMemberView: () => deleteMemberView,
 }));

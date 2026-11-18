@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button, Input, Popover, PopoverContent, PopoverTrigger } from '@tryghost/shade/components';
 import { FilterBar } from '@tryghost/shade/patterns';
 import {
+  MEMBER_VIEW_NAME_MAX_LENGTH,
   type MemberView,
   useDeleteMemberView,
   useSaveMemberView,
@@ -102,6 +103,7 @@ const ManageViewPopoverContent: React.FC<ManageViewPopoverContentProps> = ({
         <h3 className="text-sm font-semibold">{isEditing ? 'Edit view' : 'Save view'}</h3>
         <div className="flex flex-col gap-1.5">
           <Input
+            maxLength={MEMBER_VIEW_NAME_MAX_LENGTH}
             placeholder="View name"
             value={name}
             autoFocus

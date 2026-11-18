@@ -41,7 +41,11 @@ async function started({
   const connecting = sdk.connect();
   admin.connect();
   await admin.start(startContext());
-  return { ghost: await connecting, host: exports as ReturnType<typeof hostExports> };
+  return {
+    admin,
+    ghost: await connecting,
+    host: exports as ReturnType<typeof hostExports>,
+  };
 }
 
 /** A same-origin frame Admin named as the overlay, with the root the SDK in it adds. */
@@ -71,12 +75,6 @@ function dialogIn(root: HTMLElement, ...controls: string[]): HTMLElement {
   return dialog;
 }
 
-/** Lays `element` out at `width`, which jsdom doesn't do. */
-function sized(element: HTMLElement, width: number): HTMLElement {
-  Object.defineProperty(element, 'offsetWidth', { configurable: true, get: () => width });
-  return element;
-}
-
 describe('in the overlay document', () => {
   it('never starts the app, and gives the page frame an empty, transparent root', async () => {
     frame();
@@ -96,6 +94,10 @@ describe('in the overlay document', () => {
     expect(root?.parentElement).toBe(document.body);
     expect(document.head.querySelector('style')?.textContent).toContain(
       'body > :not([data-ghost-overlay-root], [data-ghost-overlay-guard]) { display: none !important; }',
+    );
+    // An app's own styles can't give it a scrollbar.
+    expect(document.head.querySelector('style')?.textContent).toContain(
+      'overflow: hidden !important; scrollbar-gutter: auto !important;',
     );
     app.remove();
     root?.remove();
@@ -157,25 +159,25 @@ describe('the overlay', () => {
     expect(ghost.overlay.container()).toBeUndefined();
   });
 
-  it('has Admin show it with the topmost open dialog’s tint and width, and hide it once none is open', async () => {
+  it('has Admin show it with the topmost open dialog’s tint, and hide it once none is open', async () => {
     const { root, window: overlayWindow } = overlay();
     const { ghost, host } = await started({ siblings: [overlayWindow] });
     expect(ghost.overlay.container()).toBe(root);
 
-    const sheet = ghost.overlay.hold('sheet', sized(dialogIn(root), 384), noRefusal);
+    const sheet = ghost.overlay.hold('sheet', dialogIn(root), noRefusal);
     sheet.setOpen(true);
     await settle();
-    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'sheet', width: 384 });
+    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'sheet' });
 
-    const dialog = ghost.overlay.hold('dialog', sized(dialogIn(root), 512), noRefusal);
+    const dialog = ghost.overlay.hold('dialog', dialogIn(root), noRefusal);
     dialog.setOpen(true);
     await settle();
-    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'dialog', width: 512 });
+    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'dialog' });
 
     dialog.setOpen(false);
     dialog.release();
     await settle();
-    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'sheet', width: 384 });
+    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'sheet' });
 
     sheet.setOpen(false);
     await settle();
@@ -184,48 +186,28 @@ describe('the overlay', () => {
     expect(host.overlayShown).toHaveBeenCalledTimes(3);
   });
 
-  it('has Admin resize it as the topmost open dialog’s width changes', async () => {
+  it('sets the overlay’s safe area on its document, as Admin lays it out', async () => {
     const { root, window: overlayWindow } = overlay();
-    const observed: Element[] = [];
-    let resized = () => {};
-    // jsdom has no ResizeObserver. The SDK uses the overlay's, as the dialogs live there.
-    Object.assign(overlayWindow, {
-      ResizeObserver: class {
-        constructor(callback: () => void) {
-          resized = callback;
-        }
-        observe(element: Element) {
-          observed.push(element);
-        }
-        unobserve() {}
-        disconnect() {}
-      },
+    const { admin: fake, ghost } = await started({ siblings: [overlayWindow] });
+    const insets = () =>
+      ['top', 'right', 'bottom', 'left'].map((edge) =>
+        overlayWindow.document.documentElement.style.getPropertyValue(
+          `--ghost-safe-area-inset-${edge}`,
+        ),
+      );
+    expect(ghost.overlay.container()).toBe(root);
+    expect(insets()).toEqual(['44px', '8px', '65px', '293px']);
+
+    await fake.thread.imports.layoutChanged({
+      safeArea: { top: 0, right: 24, bottom: 57, left: 24 },
+      overlaySafeArea: { top: 44, right: 32, bottom: 65, left: 32 },
     });
-    const { ghost, host } = await started({ siblings: [overlayWindow] });
-    const element = sized(dialogIn(root), 512);
-    ghost.overlay.hold('dialog', element, noRefusal).setOpen(true);
-    await settle();
-    expect(observed).toEqual([element]);
 
-    sized(element, 768);
-    resized();
-    await settle();
-    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'dialog', width: 768 });
-
-    // Nothing is sent again for a width that hasn't changed.
-    resized();
-    await settle();
-    expect(host.overlayShown).toHaveBeenCalledTimes(2);
-  });
-
-  it('sends a width of at least a pixel, for a dialog not laid out yet', async () => {
-    const { root, window: overlayWindow } = overlay();
-    const { ghost, host } = await started({ siblings: [overlayWindow] });
-
-    ghost.overlay.hold('dialog', sized(dialogIn(root), 0), noRefusal).setOpen(true);
-    await settle();
-
-    expect(host.overlayShown).toHaveBeenLastCalledWith({ tint: 'dialog', width: 1 });
+    expect(insets()).toEqual(['44px', '32px', '65px', '32px']);
+    // The page's own document gets the page's safe area, not the overlay's.
+    expect(document.documentElement.style.getPropertyValue('--ghost-safe-area-inset-left')).toBe(
+      '24px',
+    );
   });
 
   it('presses the overlay outside every dialog when Admin says its tint was pressed', async () => {

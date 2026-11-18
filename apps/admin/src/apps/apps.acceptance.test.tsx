@@ -768,6 +768,12 @@ describe('Managing apps', () => {
         position: { x: x - box.left, y: y - box.top },
       });
       await expect.poll(sidebarScreen.floatingState).toBe('open');
+
+      // Moving on into the app's page, away from the navigation, closes it again.
+      await userEvent.hover(appsScreen.frame(), {
+        position: { x: frame.width * 0.75, y: y - frame.top },
+      });
+      await expect.poll(sidebarScreen.floatingState).toBe('closed');
     });
 
     it('keeps the footer beside the default nav, with the same space at both ends', async () => {
@@ -1378,7 +1384,7 @@ describe('Managing apps', () => {
       await expect.element(appsScreen.frame()).toBeVisible();
       await expect.element(appsScreen.overlayFrame()).not.toBeVisible();
 
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet', width: 384 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet' }));
 
       await expect.element(appsScreen.overlayFrame()).toBeVisible();
       await expect.poll(() => tintClasses()).toContain('opacity-100');
@@ -1411,7 +1417,7 @@ describe('Managing apps', () => {
       await fakeAppPage(installation(), { kind: 'raw' });
       await renderAdminApp(APP_ROUTE, { labs });
       await expect.element(appsScreen.frame()).toBeVisible();
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
       await expect.element(appsScreen.overlayFrame()).toBeVisible();
 
       await userEvent.click(appsScreen.overlayTint(), { position: { x: 5, y: 5 } });
@@ -1420,17 +1426,18 @@ describe('Managing apps', () => {
       expect(tintClasses()).not.toContain('opacity-0');
     });
 
-    describe('shows only the strip the dialog or sheet on top fills', () => {
+    describe('shows only the app’s safe area', () => {
       const overlayFrame = () => appsScreen.overlayFrame().element() as HTMLIFrameElement;
       /** What's under a point of the window, for presses there. */
       const pressed = (x: number, y: number) => document.elementFromPoint(x, y);
+      const tint = () => appsScreen.overlayTint().element();
 
       it('over the whole window, so the dialog lays out as Admin’s own would', async () => {
         await fakeAppPage(installation(), { kind: 'raw' });
         await renderAdminApp(APP_ROUTE, { labs });
         await expect.element(appsScreen.frame()).toBeVisible();
 
-        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
 
         await expect.element(appsScreen.overlayFrame()).toBeVisible();
         const box = overlayFrame().getBoundingClientRect();
@@ -1442,50 +1449,219 @@ describe('Managing apps', () => {
         ]);
       });
 
-      it('centred on the window for a dialog, whatever the page’s own box', async () => {
+      it('over the app’s page, and none of Admin’s chrome, its footer included', async () => {
         await fakeAppPage(installation(), { kind: 'raw' });
         await renderAdminApp(APP_ROUTE, { labs });
         await expect.element(appsScreen.frame()).toBeVisible();
 
-        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet' }));
 
         await expect.element(appsScreen.overlayFrame()).toBeVisible();
-        const centre = window.innerWidth / 2;
-        const middle = window.innerHeight / 2;
-        expect(pressed(centre, middle)).toBe(overlayFrame());
-        expect(pressed(centre - 256 - 24 + 2, middle)).toBe(overlayFrame());
-        // Beside the strip, a press is Admin's, over its sidebar or its page alike.
-        expect(pressed(centre - 256 - 24 - 2, middle)).toBe(appsScreen.overlayTint().element());
-        expect(pressed(5, middle)).toBe(appsScreen.overlayTint().element());
+        const pageBox = appsScreen.frame().element().getBoundingClientRect();
+        const footer = appsScreen.footer().element().getBoundingClientRect();
+        const middle = (pageBox.top + footer.top) / 2;
+        expect(pressed(pageBox.left + 2, middle)).toBe(overlayFrame());
+        expect(pressed(pageBox.right - 2, pageBox.top + 2)).toBe(overlayFrame());
+        expect(pressed(pageBox.left + 2, footer.top - 2)).toBe(overlayFrame());
+        // Admin's navigation, beside the page, and the app's footer, over its bottom.
+        expect(pressed(pageBox.left - 2, middle)).toBe(tint());
+        expect(pressed(pageBox.left + 2, footer.top + 2)).toBe(tint());
       });
 
-      it('against the window’s right edge for a sheet', async () => {
+      it('clear of Admin 7’s unpinned nav, whose circle reaches past the page’s padding', async () => {
+        allowUnhandledRequests();
         await fakeAppPage(installation(), { kind: 'raw' });
-        await renderAdminApp(APP_ROUTE, { labs });
+        const me = currentUserResponse();
+        me.users[0].accessibility = JSON.stringify({
+          navigation: {
+            expanded: { posts: true, members: true },
+            menu: { visible: true, mode: 'compact' },
+          },
+        });
+        await renderAdminApp(APP_ROUTE, {
+          labs: { ...labs, admin7Design: true },
+          boot: { browseMe: { response: me } },
+        });
         await expect.element(appsScreen.frame()).toBeVisible();
+        await expect.poll(sidebarScreen.floatingState).toBe('closed');
+        const circle = document
+          .querySelector('[data-slot=floating-sidebar]')!
+          .getBoundingClientRect();
 
-        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet', width: 384 }));
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet' }));
 
         await expect.element(appsScreen.overlayFrame()).toBeVisible();
-        const right = window.innerWidth;
-        expect(pressed(right - 2, 2)).toBe(overlayFrame());
-        expect(pressed(right - 384 - 24 + 2, 2)).toBe(overlayFrame());
-        expect(pressed(right - 384 - 24 - 2, 2)).toBe(appsScreen.overlayTint().element());
+        const middle = circle.top + circle.height / 2;
+        // The circle, and the space beside it where hovering opens the navigation, then past it.
+        expect(pressed(circle.right - 2, middle)).toBe(tint());
+        expect(pressed(circle.right + 12, middle)).toBe(tint());
+        expect(pressed(circle.right + 20, middle)).toBe(overlayFrame());
+
+        // Hovering below the circle, over the tint, doesn't open the navigation beneath it, also
+        // straight from the app's overlay. The navigation only opens for a pointer that comes from
+        // elsewhere, so it starts beside, then over the overlay.
+        await userEvent.hover(appsScreen.overlayTint(), { position: { x: 5, y: 5 } });
+        await userEvent.hover(appsScreen.overlayFrame(), {
+          position: { x: circle.right + 60, y: middle },
+        });
+        await userEvent.hover(appsScreen.overlayTint(), {
+          position: { x: circle.left + circle.width / 2, y: circle.bottom + 120 },
+        });
+        await new Promise((resolve) => {
+          setTimeout(resolve, 300);
+        });
+        expect(sidebarScreen.floatingState()).toBe('closed');
       });
 
-      it('as wide as the page says, as that changes, without a new click', async () => {
+      it('none of Admin 7’s unpinned nav while it’s open over the page', async () => {
+        allowUnhandledRequests();
+        await fakeAppPage(installation(), { kind: 'raw' });
+        const me = currentUserResponse();
+        me.users[0].accessibility = JSON.stringify({
+          navigation: {
+            expanded: { posts: true, members: true },
+            menu: { visible: true, mode: 'compact' },
+          },
+        });
+        await renderAdminApp(APP_ROUTE, {
+          labs: { ...labs, admin7Design: true },
+          boot: { browseMe: { response: me } },
+        });
+        await expect.element(appsScreen.frame()).toBeVisible();
+        await expect.poll(sidebarScreen.floatingState).toBe('closed');
+        // Opened by hovering below its circle, as it opens over Admin's own pages.
+        const circle = document
+          .querySelector('[data-slot=floating-sidebar]')!
+          .getBoundingClientRect();
+        await userEvent.hover(appsScreen.footer());
+        await userEvent.hover(appsScreen.frame(), {
+          position: { x: 300, y: 300 },
+        });
+        await userEvent.hover(sidebarScreen.shellNav(), {
+          position: { x: circle.width / 2, y: circle.height + 120 },
+        });
+        await expect.poll(sidebarScreen.floatingState).toBe('open');
+        const panel = document
+          .querySelector('[data-slot=floating-sidebar]')!
+          .getBoundingClientRect();
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet' }));
+
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        // Wherever the open panel is over the page, the press is Admin's.
+        expect(pressed(panel.right - 4, panel.top + panel.height / 2)).toBe(tint());
+        expect(pressed(panel.right + 20, panel.top + panel.height / 2)).toBe(overlayFrame());
+      });
+
+      it('moves the side panel’s window out of its way, also when it opens between dialogs', async () => {
         await fakeAppPage(installation(), { kind: 'raw' });
         await renderAdminApp(APP_ROUTE, { labs });
         await expect.element(appsScreen.frame()).toBeVisible();
-        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
         await expect.element(appsScreen.overlayFrame()).toBeVisible();
-        const centre = window.innerWidth / 2;
-        const middle = window.innerHeight / 2;
-        expect(pressed(centre + 256 + 24 + 50, middle)).toBe(appsScreen.overlayTint().element());
+        answer(await callHostRaw(APP_ORIGIN, 'overlayHidden'));
+        await expect.element(appsScreen.overlayFrame()).not.toBeVisible();
+        const help = document.createElement('iframe');
+        help.srcdoc = '<p>Help</p>';
+        window.ghost!.sidePanel.open(help, { size: 'default' });
+        const window_ = () => document.querySelector('[data-side-panel-layout=window]')!;
+        await expect.poll(() => window_().getAttribute('data-side-panel')).toBe('default');
+        await new Promise((resolve) => {
+          setTimeout(resolve, 400);
+        });
+        const panel = window_().getBoundingClientRect();
 
-        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 768 }));
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
 
-        await expect.poll(() => pressed(centre + 256 + 24 + 50, middle)).toBe(overlayFrame());
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        // Out of the way, as Admin's own dialogs cover it, so the app's dialog shows whole there.
+        expect(getComputedStyle(window_()).visibility).toBe('hidden');
+        expect(pressed(panel.left + 4, panel.top + 4)).toBe(overlayFrame());
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayHidden'));
+        await expect.poll(() => getComputedStyle(window_()).visibility).toBe('visible');
+      });
+
+      it('moves the side panel’s bar out of its way, which floats beside a docked panel too', async () => {
+        onTestFinished(() => page.viewport(1280, 720));
+        await fakeAppPage(installation(), { kind: 'raw' });
+        await renderAdminApp(APP_ROUTE, { labs });
+        await expect.element(appsScreen.frame()).toBeVisible();
+        const help = document.createElement('iframe');
+        help.srcdoc = '<p>Help</p>';
+        // Minimized as a window, then the window widens enough to dock it.
+        const panel = window.ghost!.sidePanel.open(help, { size: 'default' });
+        panel?.setSize('minimized');
+        const bar = () => document.querySelector('[data-side-panel=minimized]');
+        await expect.poll(() => bar()).not.toBeNull();
+        await page.viewport(1600, 800);
+        await expect.poll(() => bar()?.getAttribute('data-side-panel-layout')).toBe('docked');
+        await new Promise((resolve) => {
+          setTimeout(resolve, 400);
+        });
+        const box = bar()!.getBoundingClientRect();
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
+
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        expect(getComputedStyle(bar()!).visibility).toBe('hidden');
+        expect(pressed(box.left + box.width / 2, box.top + box.height / 2)).not.toBe(bar());
+      });
+
+      it('and takes no presses from the moment it starts to hide', async () => {
+        await fakeAppPage(installation(), { kind: 'raw' });
+        await renderAdminApp(APP_ROUTE, { labs });
+        await expect.element(appsScreen.frame()).toBeVisible();
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        const pageBox = appsScreen.frame().element().getBoundingClientRect();
+        const centre = [pageBox.left + pageBox.width / 2, pageBox.top + 100] as const;
+        expect(pressed(...centre)).toBe(overlayFrame());
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayHidden'));
+
+        // While it still shows, for the dialog's closing animation, presses reach the page.
+        await expect.poll(() => pressed(...centre)).toBe(appsScreen.frame().element());
+        expect(getComputedStyle(overlayFrame()).visibility).toBe('visible');
+      });
+
+      it('with the card’s rounded corners, which stay Admin’s', async () => {
+        allowUnhandledRequests();
+        await fakeAppPage(installation(), { kind: 'raw' });
+        await renderAdminApp(APP_ROUTE, { labs: { ...labs, admin7Design: true } });
+        await expect.element(appsScreen.frame()).toBeVisible();
+        await expect.poll(sidebarScreen.floatingState).toBe('pinned');
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'sheet' }));
+
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        const card = appsScreen.frame().element().getBoundingClientRect();
+        // The card's top-right corner, and just inside it.
+        expect(pressed(card.right - 1, card.top + 1)).toBe(tint());
+        expect(pressed(card.right - 12, card.top + 12)).toBe(overlayFrame());
+      });
+
+      it('beside Admin 7’s pinned nav, which the app’s page runs beneath', async () => {
+        // The Admin 7 sidebar owns its request graph (member stats); this is about the overlay.
+        allowUnhandledRequests();
+        await fakeAppPage(installation(), { kind: 'raw' });
+        await renderAdminApp(APP_ROUTE, { labs: { ...labs, admin7Design: true } });
+        await expect.element(appsScreen.frame()).toBeVisible();
+        await expect.poll(sidebarScreen.floatingState).toBe('pinned');
+        const nav = document.querySelector('[data-slot=floating-sidebar]')!.getBoundingClientRect();
+        const pageBox = appsScreen.frame().element().getBoundingClientRect();
+        // Beneath the nav, the app's page is there, but not in its safe area.
+        expect(pageBox.left).toBeLessThan(nav.right);
+
+        answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
+
+        await expect.element(appsScreen.overlayFrame()).toBeVisible();
+        const footer = appsScreen.footer().element().getBoundingClientRect();
+        const middle = (pageBox.top + footer.top) / 2;
+        expect(pressed(nav.right - 2, middle)).toBe(tint());
+        expect(pressed(footer.left + 2, middle)).toBe(overlayFrame());
+        // Above the page, Admin 7's top bar.
+        expect(pressed(footer.left + 2, pageBox.top - 2)).toBe(tint());
       });
     });
 
@@ -1493,7 +1669,7 @@ describe('Managing apps', () => {
       await fakeAppPage(installation(), { kind: 'raw' });
       await renderAdminApp(APP_ROUTE, { labs });
       await expect.element(appsScreen.frame()).toBeVisible();
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
       await expect.element(appsScreen.overlayFrame()).toBeVisible();
       const overlayFrame = appsScreen.overlayFrame().element();
       await expect.poll(() => document.activeElement).toBe(overlayFrame);
@@ -1508,7 +1684,7 @@ describe('Managing apps', () => {
       await fakeAppPage(installation(), { kind: 'raw' });
       await renderAdminApp(APP_ROUTE, { labs });
       await expect.element(appsScreen.frame()).toBeVisible();
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
       await expect.poll(() => document.activeElement).toBe(appsScreen.overlayFrame().element());
 
       answer(await callHostRaw(APP_ORIGIN, 'overlayHidden'));
@@ -1521,7 +1697,7 @@ describe('Managing apps', () => {
       await fakeAppPage(installation(), { kind: 'raw' });
       await renderAdminApp(APP_ROUTE, { labs });
       await expect.element(appsScreen.frame()).toBeVisible();
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
       await expect.poll(() => document.activeElement).toBe(appsScreen.overlayFrame().element());
       const elsewhere = document.createElement('button');
       document.body.append(elsewhere);
@@ -1545,7 +1721,7 @@ describe('Managing apps', () => {
       const state = () => ({ hidden: admin?.getAttribute('aria-hidden'), inert: admin?.inert });
       expect(state()).toEqual({ hidden: null, inert: false });
 
-      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog', width: 512 }));
+      answer(await callHostRaw(APP_ORIGIN, 'overlayShown', { tint: 'dialog' }));
       // The page frame too, so focus can't land in the page behind the dialog.
       await expect.poll(state).toEqual({ hidden: 'true', inert: true });
       expect(appsScreen.overlayFrame().element().closest('[inert]')).toBeNull();
@@ -1567,16 +1743,15 @@ describe('Managing apps', () => {
       await expect.element(appsScreen.frame()).toBeVisible();
     });
 
-    it('refuses a tint Admin doesn’t know, a width that isn’t whole pixels, or a position', async () => {
+    it('refuses a tint Admin doesn’t know, or a size or position, which Admin decides', async () => {
       await fakeAppPage(installation(), { kind: 'raw' });
       await renderAdminApp(APP_ROUTE, { labs });
       await expect.element(appsScreen.frame()).toBeVisible();
 
       for (const options of [
-        { tint: 'none', width: 512 },
-        { tint: 'dialog' },
-        { tint: 'dialog', width: 0 },
-        { tint: 'dialog', width: 512, rect: { x: 0, y: 0 } },
+        { tint: 'none' },
+        { tint: 'dialog', width: 512 },
+        { tint: 'dialog', rect: { x: 0, y: 0 } },
       ]) {
         expect(refusal(await callHostRaw(APP_ORIGIN, 'overlayShown', options))).toMatch(
           /^invalid_argument: /,

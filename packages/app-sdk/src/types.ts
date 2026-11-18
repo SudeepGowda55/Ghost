@@ -69,8 +69,9 @@ export interface OverlayHold {
 /**
  * Where the app's dialogs and sheets render so they cover all of Admin, not just the app's
  * page: a second document on the app's origin that Admin shows above its own chrome, over a
- * tint. It covers the whole window, so a dialog sits where Admin's own would, and Admin shows
- * only the strip the dialog or sheet on top fills.
+ * tint. It covers the whole window, so a dialog lays out as Admin's own do, and Admin shows only
+ * the app's safe area of it: in the overlay, `--ghost-safe-area-inset-*` are measured from the
+ * window's edges.
  *
  * That document is the app's page, loaded a second time. It never connects, but code that runs
  * before `connect()` resolves runs there too, so start fetches, analytics and the like once
@@ -85,9 +86,7 @@ export interface GhostOverlay {
   container(): HTMLElement | undefined;
   /**
    * Called by a dialog or sheet rendered into `container()` when it mounts, with its content
-   * element: the one that has `role="dialog"`, and holds its focus. Its width is what Admin
-   * sizes the strip of the overlay it shows by, so it's the dialog's panel, not a wrapper around
-   * it. A sheet is placed against the window's right edge.
+   * element: the one that has `role="dialog"`, and holds its focus.
    *
    * `refused` is called if Admin won't show the overlay as the dialog opens, such as when the
    * publisher's click has run out by the time Admin hears of it. The dialog then renders in the

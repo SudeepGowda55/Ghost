@@ -345,6 +345,8 @@ export function SidePanel({ visible, framed, docked, locked, onReturnFocusLost }
             )
           : cn(
               'fixed z-30 origin-bottom-right bg-background shadow-xl ring-1 ring-border',
+              // Out of the way of an app's dialog over the page (see apps/components/app-overlay.tsx)
+              '[html[data-app-overlay]_&]:invisible',
               WINDOW_RADIUS_CLASS,
               // It grows from its corner as it opens, and goes at once as it closes,
               // as the bar does: shrinking into the corner would read as minimizing
@@ -353,6 +355,8 @@ export function SidePanel({ visible, framed, docked, locked, onReturnFocusLost }
                 : 'pointer-events-none invisible scale-[0.3] opacity-0 transition-none',
             ),
       )}
+      // Over an app's page, which an app's overlay leaves uncovered (see app-overlay.tsx)
+      data-floating-chrome={shown && floating ? '' : undefined}
       data-side-panel={shown ? state.size : 'closed'}
       data-side-panel-layout={docked ? 'docked' : 'window'}
       style={

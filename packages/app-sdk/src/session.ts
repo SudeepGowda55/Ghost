@@ -139,7 +139,7 @@ export class Channel {
     this.#overlay = new PageOverlay({
       supported: this.#hostExports.has('overlayShown') && this.#hostExports.has('overlayHidden'),
       mode: () => this.#theme?.mode ?? 'light',
-      show: (tint, width) => this.#call('overlayShown', { tint, width }),
+      show: (tint) => this.#call('overlayShown', { tint }),
       hide: () => this.#call('overlayHidden'),
       found: (overlay) => this.#history?.watchLinks(overlay),
       // The page starts again, rather than hold a dialog no one can see or close.
@@ -182,6 +182,7 @@ export class Channel {
     this.#theme = Object.freeze({ ...context.theme });
     // Before the app starts, so its first paint already keeps clear of Admin's chrome.
     applySafeArea(document.documentElement, context.layout.safeArea);
+    this.#overlay.layoutChanged(context.layout.overlaySafeArea);
     // Admin owns the history from here on. The page's own address is its route: Admin loads a
     // new frame at its own path, so the two differ only when the page's server redirected it or
     // a form or link loaded another page in place, and then Admin follows the page.
@@ -219,6 +220,7 @@ export class Channel {
       throw refusal('invalid_argument', "Ghost sent a layout this SDK doesn't understand");
     }
     applySafeArea(document.documentElement, layout.safeArea);
+    this.#overlay.layoutChanged(layout.overlaySafeArea);
   }
 
   #pathChanged(path: unknown) {

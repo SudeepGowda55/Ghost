@@ -5,11 +5,18 @@ import {
   OVERLAY_FRAME_NAME,
   type OverlayOptions,
   type OverlayTint,
+  type SafeArea,
 } from '@tryghost/app-contracts/bridge';
 import { ShadeScope } from '@tryghost/shade/app';
 import { cn } from '@tryghost/shade/utils';
 import { APP_FRAME_ALLOW, APP_FRAME_SANDBOX } from '@/apps/lib/frame';
-import { type OverlayStrip, overlayStrip } from '@/apps/lib/overlay-strip';
+import { APP_OVERLAY_ATTRIBUTE } from '@/apps/lib/overlay-clip';
+import {
+  type Box,
+  type Corners,
+  FLOATING_CHROME_SELECTOR,
+  overlayClipPath,
+} from '@/apps/lib/overlay-clip';
 
 // Shade's own overlays: a dialog's, and a sheet's, which is lighter.
 const TINT_CLASSES: Record<OverlayTint, string> = {
@@ -17,55 +24,138 @@ const TINT_CLASSES: Record<OverlayTint, string> = {
   sheet: 'bg-black/10',
 };
 
-const clipPath = ({ top, right, bottom, left }: OverlayStrip) =>
-  `inset(${top}px ${right}px ${bottom}px ${left}px)`;
-
-interface Viewport {
-  width: number;
-  height: number;
-  /** Where the app's page starts, below Admin's top bar. */
-  top: number;
+interface Surroundings {
+  window: { width: number; height: number };
+  /** Admin's card, which clips the app's page, and how far its corners are rounded. */
+  card: (Box & { radius: number }) | undefined;
+  /** Admin's chrome floating over the app's page. */
+  chrome: Box[];
 }
 
-/** The window's size and where the page frame starts in it, followed while `active`. */
-function useViewport(active: boolean, pageFrame: HTMLIFrameElement | null) {
-  const [viewport, setViewport] = useState<Viewport>(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-    top: 0,
+const sameBox = (a: Box, b: Box) =>
+  a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;
+
+const sameSurroundings = (a: Surroundings, b: Surroundings) =>
+  a.window.width === b.window.width &&
+  a.window.height === b.window.height &&
+  (a.card === b.card ||
+    (a.card !== undefined &&
+      b.card !== undefined &&
+      a.card.radius === b.card.radius &&
+      sameBox(a.card, b.card))) &&
+  a.chrome.length === b.chrome.length &&
+  a.chrome.every((box, index) => sameBox(box, b.chrome[index]));
+
+const outerBox = (element: Element): Box => {
+  const { top, right, bottom, left } = element.getBoundingClientRect();
+  return {
+    top: Math.floor(top),
+    right: Math.ceil(right),
+    bottom: Math.ceil(bottom),
+    left: Math.floor(left),
+  };
+};
+
+/** The nearest element around `element` that clips it with rounded corners: Admin's card. */
+function roundedClipElement(element: Element): Element | undefined {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    if ((parseFloat(style.borderTopRightRadius) || 0) > 0 && style.overflow !== 'visible') {
+      return parent;
+    }
+  }
+  return undefined;
+}
+
+/** Admin's card, and how far its corners are rounded. */
+function roundedClip(element: Element): (Box & { radius: number }) | undefined {
+  const card = roundedClipElement(element);
+  return card
+    ? { ...outerBox(card), radius: parseFloat(getComputedStyle(card).borderTopRightRadius) || 0 }
+    : undefined;
+}
+
+/**
+ * What the overlay's clip has to allow for besides the safe area, measured each time it shows and
+ * while it does, then kept as it fades: the window, Admin's card, and Admin's chrome floating over
+ * the app's page, which can change after the safe area was measured, such as the unpinned
+ * navigation closing as the overlay shows. Chrome that's hidden doesn't count.
+ */
+function useSurroundings(
+  shown: boolean,
+  everShown: boolean,
+  pageFrame: HTMLIFrameElement | null,
+): Surroundings {
+  const [surroundings, setSurroundings] = useState<Surroundings>(() => ({
+    window: { width: window.innerWidth, height: window.innerHeight },
+    card: undefined,
+    chrome: [],
   }));
   useLayoutEffect(() => {
-    if (!active) {
+    if (!everShown) {
       return undefined;
     }
-    const measure = () =>
-      setViewport((current) => {
-        const next = {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          top: pageFrame ? Math.max(0, Math.round(pageFrame.getBoundingClientRect().top)) : 0,
-        };
-        return current.width === next.width &&
-          current.height === next.height &&
-          current.top === next.top
-          ? current
-          : next;
-      });
+    const floating = () =>
+      [...document.querySelectorAll(FLOATING_CHROME_SELECTOR)].filter(
+        (element) => getComputedStyle(element).visibility !== 'hidden',
+      );
+    const measure = () => {
+      const { clientWidth, clientHeight } = document.documentElement;
+      const next = {
+        window: { width: clientWidth, height: clientHeight },
+        card: pageFrame ? roundedClip(pageFrame) : undefined,
+        chrome: floating().map(outerBox),
+      };
+      setSurroundings((current) => (sameSurroundings(current, next) ? current : next));
+    };
     measure();
+    // The chrome resizes as it morphs, such as the navigation's capsule closing.
+    const observer = new ResizeObserver(measure);
+    for (const element of document.querySelectorAll(FLOATING_CHROME_SELECTOR)) {
+      observer.observe(element);
+    }
+    // And the card, which moves and resizes as Admin's frame opens and closes around it.
+    const card = pageFrame && roundedClipElement(pageFrame);
+    if (card) {
+      observer.observe(card);
+    }
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [active, pageFrame]);
-  return viewport;
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+    // Measured again each time it shows, as chrome may have come or gone since.
+  }, [shown, everShown, pageFrame]);
+  return surroundings;
+}
+
+/** The corners of the safe area that are the card's own, which the clip rounds as the card does. */
+function cardCorners(safeArea: SafeArea, { window: view, card }: Surroundings): Corners {
+  if (!card) {
+    return { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
+  }
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+  const top = near(safeArea.top, card.top);
+  const bottom = near(view.height - safeArea.bottom, card.bottom);
+  const left = near(safeArea.left, card.left);
+  const right = near(view.width - safeArea.right, card.right);
+  return {
+    topLeft: top && left ? card.radius : 0,
+    topRight: top && right ? card.radius : 0,
+    bottomRight: bottom && right ? card.radius : 0,
+    bottomLeft: bottom && left ? card.radius : 0,
+  };
 }
 
 /**
  * The app's overlay frame and Admin's tint, which let the app's dialogs and sheets cover all of
  * Admin. Both sit above Admin's chrome and cover the whole window: the frame does so that the
- * app's dialogs and sheets lay out against the window, exactly where Admin's own sit, with
- * Shade's breakpoints and sizes measured against it too. Admin clips the frame to the strip
- * the dialog or sheet on top fills (see `overlayStrip`), so whatever the app draws outside that
- * strip never shows, and a press outside it lands on the tint, which is Admin's. A dialog or
- * sheet wide enough overlaps Admin's tinted sidebar, as Admin's own do.
+ * app's dialogs and sheets lay out against the window, as Admin's own do, with Shade's
+ * breakpoints and sizes measured against it too. Admin clips the frame to the app's safe area,
+ * the part of the window its page has to itself, less any of Admin's chrome floating over it
+ * (see `overlayClipPath`), so whatever the app draws over Admin's chrome never shows, and a press
+ * there lands on the tint, which is Admin's. The SDK gives the overlay's
+ * document the same safe area, so Shade keeps dialogs and sheets inside it.
  *
  * The overlay frame loads the app's page under `OVERLAY_FRAME_NAME`. The SDK in that document
  * keeps the app from starting there and gives the page frame, on the same origin, an empty,
@@ -78,29 +168,44 @@ function useViewport(active: boolean, pageFrame: HTMLIFrameElement | null) {
  * document: a frame whose scheme differs from its document's paints an opaque background.
  */
 export const AppOverlay: React.FC<{
-  /** The app's page frame, where Admin's top bar ends, and where focus goes as the overlay hides. */
+  /** The app's page frame, where focus goes as the overlay hides. */
   pageFrame: HTMLIFrameElement | null;
+  /**
+   * The app's safe area, as insets from the window's edges: all of the frame that shows. Until
+   * Admin has measured it, none of the frame shows.
+   */
+  safeArea: SafeArea | undefined;
   src: string;
   title: string;
-  /** The tint and width while the page has a dialog or sheet open in the overlay. */
+  /** The tint while the page has a dialog or sheet open in the overlay. */
   overlay: OverlayOptions | undefined;
   colorScheme: 'light' | 'dark';
   onDismiss: () => void;
   /** The overlay frame holds a document on Admin's own origin. */
   onLeft: () => void;
-}> = ({ pageFrame, src, title, overlay, colorScheme, onDismiss, onLeft }) => {
+}> = ({ pageFrame, safeArea, src, title, overlay, colorScheme, onDismiss, onLeft }) => {
   // Fixed for the frame's life: a new one, as a single-page app moves, would reload it. A page
   // that loads another document remounts the overlay with that one's address.
   const [source] = useState(src);
   const shown = overlay !== undefined;
-  // The tint fades out in the colour it faded in with, and the strip stays where it was, so the
-  // dialog's own closing animation shows.
+  // The tint fades out in the colour it faded in with, so the dialog's own closing animation
+  // shows.
   const [last, setLast] = useState<OverlayOptions>();
-  if (overlay && (overlay.tint !== last?.tint || overlay.width !== last.width)) {
+  if (overlay && overlay.tint !== last?.tint) {
     setLast(overlay);
   }
-  const viewport = useViewport(shown, pageFrame);
-  const strip = last && overlayStrip(last, viewport, viewport.top);
+  // Admin's chrome that floats over the app's page, such as the side panel as a window, steps out
+  // of the way while the overlay shows, as Admin's own dialogs cover it: left in, the overlay
+  // would leave a hole where it is, over the app's dialog. Before the clip is measured, below.
+  useLayoutEffect(() => {
+    if (!shown) {
+      return undefined;
+    }
+    document.documentElement.setAttribute(APP_OVERLAY_ATTRIBUTE, '');
+    return () => document.documentElement.removeAttribute(APP_OVERLAY_ATTRIBUTE);
+  }, [shown]);
+
+  const surroundings = useSurroundings(shown, last !== undefined, pageFrame);
 
   // Focus goes into the overlay as it shows, and back to the page frame as it hides, so the page
   // can put it back on what opened the dialog. The page frame moves focus to the dialog's first
@@ -122,6 +227,21 @@ export const AppOverlay: React.FC<{
   // reads the page's document, would see it. That's lifted before focus goes back to the page.
   // `aria-hidden`'s own `inertOthers` counts with `hideOthers`, so undoing one leaves the other's
   // attribute behind; these are marked here instead, leaving live regions, such as toasts, alone.
+  // Admin's own pointer handlers don't see the pointer over the tint either, so hovering beside
+  // Admin 7's unpinned navigation doesn't open it under the overlay, where the app could draw over
+  // it.
+  const tint = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = tint.current;
+    const stop = (event: PointerEvent) => event.stopPropagation();
+    element?.addEventListener('pointermove', stop);
+    element?.addEventListener('pointerover', stop);
+    return () => {
+      element?.removeEventListener('pointermove', stop);
+      element?.removeEventListener('pointerover', stop);
+    };
+  }, []);
+
   const layer = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!shown || !layer.current) {
@@ -150,6 +270,7 @@ export const AppOverlay: React.FC<{
   return createPortal(
     <ShadeScope ref={layer} style={{ width: 'unset', height: 'unset' }}>
       <div
+        ref={tint}
         className={cn(
           'fixed inset-0 z-50 transition-opacity duration-200',
           TINT_CLASSES[last?.tint ?? 'dialog'],
@@ -169,15 +290,26 @@ export const AppOverlay: React.FC<{
         // Hidden only once the tint has faded, so a dialog's own closing animation shows.
         className={cn(
           'fixed inset-0 z-50 block size-full border-0 transition-[visibility] duration-0',
-          shown ? 'visible delay-0' : 'invisible delay-200',
+          // It takes no presses from the moment it starts to hide.
+          shown ? 'visible delay-0' : 'pointer-events-none invisible delay-200',
         )}
         data-testid="app-overlay-frame"
         name={OVERLAY_FRAME_NAME}
         referrerPolicy="strict-origin-when-cross-origin"
         sandbox={APP_FRAME_SANDBOX}
         src={source}
-        // Nothing shows before the page has said what's open.
-        style={{ clipPath: strip ? clipPath(strip) : 'inset(50%)', colorScheme }}
+        // Only the app's safe area shows: the rest of the window is Admin's.
+        style={{
+          clipPath: safeArea
+            ? overlayClipPath(
+                safeArea,
+                surroundings.window,
+                cardCorners(safeArea, surroundings),
+                surroundings.chrome,
+              )
+            : 'inset(50%)',
+          colorScheme,
+        }}
         title={title}
         // Admin can read only a document on its own origin, never the app's. The frame's
         // first document, before the app's page loads, is Admin's own and blank.

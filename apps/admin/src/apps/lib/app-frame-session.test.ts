@@ -24,7 +24,10 @@ const context = (overrides: Partial<StartContext> = {}): StartContext => ({
   theme: { mode: 'light', accent_color: '#ff5500' },
   session: { revision: 0 },
   path: '/',
-  layout: { safeArea: { top: 0, right: 0, bottom: 57, left: 0 } },
+  layout: {
+    safeArea: { top: 0, right: 0, bottom: 57, left: 0 },
+    overlaySafeArea: { top: 44, right: 8, bottom: 65, left: 8 },
+  },
   ...overrides,
 });
 
@@ -763,11 +766,17 @@ describe('createAppFrameSession', () => {
 
   it('sends the app a layout it doesn’t have yet, once', async () => {
     const frame = await started();
-    const pinned = { safeArea: { top: 0, right: 0, bottom: 57, left: 285 } };
+    const pinned = {
+      safeArea: { top: 0, right: 0, bottom: 57, left: 285 },
+      overlaySafeArea: { top: 44, right: 8, bottom: 65, left: 293 },
+    };
 
     session.layoutChanged(admin.context.layout);
     session.layoutChanged(pinned);
-    session.layoutChanged({ safeArea: { ...pinned.safeArea } });
+    session.layoutChanged({
+      safeArea: { ...pinned.safeArea },
+      overlaySafeArea: { ...pinned.overlaySafeArea },
+    });
 
     await vi.waitFor(() => expect(frame.app.layoutChanged).toHaveBeenCalledExactlyOnceWith(pinned));
   });
@@ -778,7 +787,10 @@ describe('createAppFrameSession', () => {
 
     session.pathChanged('/episodes');
     session.themeChanged({ mode: 'dark', accent_color: '#000000' });
-    session.layoutChanged({ safeArea: { top: 0, right: 0, bottom: 57, left: 285 } });
+    session.layoutChanged({
+      safeArea: { top: 0, right: 0, bottom: 57, left: 285 },
+      overlaySafeArea: { top: 44, right: 8, bottom: 65, left: 293 },
+    });
     admin.context = context({ path: '/episodes' });
     frame.hello();
     await vi.waitFor(() => expect(session.getState().status).toBe('ready'));
@@ -818,14 +830,14 @@ describe('createAppFrameSession', () => {
   });
 
   describe('the overlay', () => {
-    it('shows with the tint and width the page asks for, and hides when the page asks', async () => {
+    it('shows with the tint the page asks for, and hides when the page asks', async () => {
       const frame = await started();
 
-      await frame.host.overlayShown({ tint: 'sheet', width: 384 });
-      expect(session.getState().overlay).toEqual({ tint: 'sheet', width: 384 });
+      await frame.host.overlayShown({ tint: 'sheet' });
+      expect(session.getState().overlay).toEqual({ tint: 'sheet' });
 
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
-      expect(session.getState().overlay).toEqual({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
+      expect(session.getState().overlay).toEqual({ tint: 'dialog' });
 
       await frame.host.overlayHidden();
       expect(session.getState().overlay).toBeUndefined();
@@ -835,44 +847,43 @@ describe('createAppFrameSession', () => {
       const frame = await started();
       userActive = false;
 
-      await expect(frame.host.overlayShown({ tint: 'dialog', width: 512 })).rejects.toThrow(
+      await expect(frame.host.overlayShown({ tint: 'dialog' })).rejects.toThrow(
         'rejected: Admin shows the overlay only while the app is started, right after the publisher clicks or types in it',
       );
       expect(session.getState().overlay).toBeUndefined();
     });
 
-    it('changes the tint and width of an overlay already shown without a new click', async () => {
+    it('changes the tint of an overlay already shown without a new click', async () => {
       const frame = await started();
-      await frame.host.overlayShown({ tint: 'sheet', width: 384 });
+      await frame.host.overlayShown({ tint: 'sheet' });
       userActive = false;
 
-      await frame.host.overlayShown({ tint: 'dialog', width: 768 });
+      await frame.host.overlayShown({ tint: 'dialog' });
 
-      expect(session.getState().overlay).toEqual({ tint: 'dialog', width: 768 });
+      expect(session.getState().overlay).toEqual({ tint: 'dialog' });
     });
 
     it('keeps the same state when the page repeats what it asked for', async () => {
       const frame = await started();
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
       const shown = session.getState();
 
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
 
       expect(session.getState()).toBe(shown);
     });
 
-    it('refuses a tint Admin doesn’t know, a width that isn’t whole pixels, or a position', async () => {
+    it('refuses a tint Admin doesn’t know, or anything besides a tint', async () => {
       const frame = await started();
 
       for (const options of [
-        { tint: 'none', width: 512 },
-        { tint: 'dialog' },
-        { tint: 'dialog', width: 0 },
-        { tint: 'dialog', width: 512, left: 0 },
+        { tint: 'none' },
+        { tint: 'dialog', width: 512 },
+        { tint: 'dialog', rect: { x: 0 } },
         'dialog',
       ]) {
         await expect(
-          frame.host.overlayShown(options as unknown as { tint: 'dialog'; width: number }),
+          frame.host.overlayShown(options as unknown as { tint: 'dialog' }),
         ).rejects.toThrow('invalid_argument');
       }
       expect(session.getState().overlay).toBeUndefined();
@@ -880,7 +891,7 @@ describe('createAppFrameSession', () => {
 
     it('hides when the page loads again', async () => {
       const frame = await started();
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
 
       session.restart();
 
@@ -889,7 +900,7 @@ describe('createAppFrameSession', () => {
 
     it('tells the page when the publisher presses the tint', async () => {
       const frame = await started();
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
 
       session.overlayDismissed();
 
@@ -898,7 +909,7 @@ describe('createAppFrameSession', () => {
 
     it('loads the page again when the overlay frame holds a document on Admin’s origin', async () => {
       const frame = await started();
-      await frame.host.overlayShown({ tint: 'dialog', width: 512 });
+      await frame.host.overlayShown({ tint: 'dialog' });
 
       session.overlayLeft();
 

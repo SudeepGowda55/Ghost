@@ -57,8 +57,9 @@ function visibleBox(element: HTMLElement, clips: HTMLElement[]) {
  * An app's page, framed by `children`, with its footer. The page runs beneath the chrome Admin
  * floats over it: the footer, along its bottom, and Admin 7's navigation, along its left. Where
  * Admin's card clips it, such as beneath the docked side panel, it doesn't show at all. The rest is
- * the page's safe area, which `onLayoutChange` gets whenever it changes, as insets from the
- * frame's edges. `placeholder`, such as a loading indicator, shows over the safe area.
+ * the page's safe area, which `onLayoutChange` gets whenever it changes: as insets from the frame's
+ * edges, and from the window's, for the overlay frame, which covers the window. `placeholder`, such
+ * as a loading indicator, shows over the safe area.
  *
  * The canvas holds still as the page slides while the navigation pins, so the insets don't change
  * mid-slide.
@@ -101,7 +102,17 @@ export const AppCanvas: React.FC<{
           Math.max(elements.strip.getBoundingClientRect().width, visible.left - box.left),
         ),
       };
-      const layout = { safeArea };
+      // The window's size without its scrollbars, which the overlay frame, fixed to it, fills.
+      const { clientWidth, clientHeight } = document.documentElement;
+      const layout = {
+        safeArea,
+        overlaySafeArea: {
+          top: Math.max(0, Math.ceil(box.top + safeArea.top)),
+          right: Math.max(0, Math.ceil(clientWidth - box.right + safeArea.right)),
+          bottom: Math.max(0, Math.ceil(clientHeight - box.bottom + safeArea.bottom)),
+          left: Math.max(0, Math.ceil(box.left + safeArea.left)),
+        },
+      };
       if (!sameLayout(reported, layout)) {
         reported = layout;
         onLayoutChange(layout);

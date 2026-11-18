@@ -222,8 +222,9 @@ function useSessionEnd(session: AppSession, onEnded: () => void) {
   }, [dataUpdatedAt, isFetching, onEnded, revision, started, since]);
 }
 
-/** The safe area until the canvas has measured it. */
 const NO_INSETS: SafeArea = { top: 0, right: 0, bottom: 0, left: 0 };
+/** The layout until the canvas has measured it. */
+const UNMEASURED: Layout = { safeArea: NO_INSETS, overlaySafeArea: NO_INSETS };
 
 /**
  * The app's page, loaded from its own URL in a sandboxed frame and connected to Admin by the
@@ -258,7 +259,8 @@ const AppFrame: React.FC<{
     [resolvedTheme, accentColor],
   );
   // Measured by the canvas before the page can connect, and whenever Admin's layout changes.
-  const [layout, setLayout] = useState<Layout>({ safeArea: NO_INSETS });
+  const [measured, setLayout] = useState<Layout>();
+  const layout = measured ?? UNMEASURED;
 
   const context: StartContext = {
     site: { url: site.url, title: site.title, timezone, locale: site.locale },
@@ -384,6 +386,7 @@ const AppFrame: React.FC<{
           colorScheme={resolvedTheme}
           overlay={overlay}
           pageFrame={pageFrame}
+          safeArea={measured?.overlaySafeArea}
           // The page's own address, so dialogs get the stylesheets of the page that renders them.
           src={appFrameUrl(url, path)}
           title={manifest.name}

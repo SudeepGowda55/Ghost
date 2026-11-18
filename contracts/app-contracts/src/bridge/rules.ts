@@ -33,9 +33,8 @@ export const START_TIMEOUT_MS = 10_000;
 export const OVERLAY_FRAME_NAME = 'ghost-app-overlay';
 
 /**
- * What the overlay shows, which sets Admin's tint and where the overlay frame sits: a dialog,
- * centred on the window, or a sheet, against its right edge with a lighter tint, as Shade's own
- * dialogs and sheets are.
+ * How dark Admin's tint is while the overlay shows: a dialog's, or a sheet's, which is lighter,
+ * the same as Shade's own overlays for each.
  */
 export const OVERLAY_TINTS = ['dialog', 'sheet'] as const;
 
@@ -97,7 +96,7 @@ export const ARGUMENT_MESSAGES = {
   pathMove: 'Expected a move of push or replace',
   place:
     'Expected a place such as { post: { id } }, { page: { id } }, { member: { id } } or { apps: true }',
-  overlayOptions: `Expected overlay options such as { tint: 'dialog', width: 512 }, with a tint of: ${OVERLAY_TINTS.join(', ')}, and a width in whole pixels`,
+  overlayOptions: `Expected overlay options such as { tint: 'dialog' }, with a tint of: ${OVERLAY_TINTS.join(', ')}`,
 } as const;
 
 /**
@@ -198,9 +197,15 @@ const SAFE_AREA_EDGES = ['top', 'right', 'bottom', 'left'] as const;
  */
 export type SafeArea = Record<(typeof SAFE_AREA_EDGES)[number], number>;
 
-/** How Admin lays out the page's frame. */
+/** How Admin lays out the page's frame, and the overlay frame above it. */
 export type Layout = {
   safeArea: SafeArea;
+  /**
+   * The same area as `safeArea`, as insets from the window's edges. The overlay frame covers the
+   * whole window, so the page's dialogs and sheets lay out against it as Admin's own do, and
+   * Admin shows only this area of it.
+   */
+  overlaySafeArea: SafeArea;
 };
 
 /**
@@ -350,7 +355,7 @@ export function isSafeArea(value: unknown): value is SafeArea {
 }
 
 export function isLayout(value: unknown): value is Layout {
-  return isRecord(value) && isSafeArea(value.safeArea);
+  return isRecord(value) && isSafeArea(value.safeArea) && isSafeArea(value.overlaySafeArea);
 }
 
 export function isStartContext(value: unknown): value is StartContext {

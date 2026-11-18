@@ -178,7 +178,7 @@ describe('a dialog in an app’s overlay', () => {
     expect(fake.holds[0].tint).toBe('sheet');
   });
 
-  it('leaves a sheet on any side but the right in the page, where Admin can’t show it', async () => {
+  it('covers Admin with a sheet on any side', async () => {
     render(
       <ShadeApp darkMode={false} overlay={fake.overlay}>
         <Sheet open>
@@ -191,15 +191,15 @@ describe('a dialog in an app’s overlay', () => {
     );
 
     const sheet = await screen.findByTestId('sheet');
-    expect(fake.container.contains(sheet)).toBe(false);
-    expect(fake.holds.length).toBe(0);
+    expect(fake.container.contains(sheet)).toBe(true);
+    expect(fake.holds[0].tint).toBe('sheet');
   });
 
-  it('moves an open sheet to the page when it moves off the right edge, with its popovers', async () => {
-    const Probe = ({ side }: { side: 'right' | 'left' }) => (
+  it('moves an open sheet to the page when it stops being modal, with its popovers', async () => {
+    const Probe = ({ modal }: { modal: boolean }) => (
       <ShadeApp darkMode={false} overlay={fake.overlay}>
-        <Sheet open>
-          <SheetContent data-testid="sheet" side={side}>
+        <Sheet modal={modal} open>
+          <SheetContent data-testid="sheet">
             <SheetTitle>Settings</SheetTitle>
             <SheetDescription>Description</SheetDescription>
             <Popover>
@@ -210,17 +210,17 @@ describe('a dialog in an app’s overlay', () => {
         </Sheet>
       </ShadeApp>
     );
-    const { rerender } = render(<Probe side="right" />);
+    const { rerender } = render(<Probe modal />);
     expect(fake.container.contains(await screen.findByTestId('sheet'))).toBe(true);
 
-    rerender(<Probe side="left" />);
+    rerender(<Probe modal={false} />);
 
     const sheet = await screen.findByTestId('sheet');
     expect(fake.container.contains(sheet)).toBe(false);
     expect(fake.holds[0].released).toBe(true);
     expect(fake.holds.length).toBe(1);
-    const backdrop = document.querySelector<HTMLElement>('[data-state="open"].fixed.inset-0');
-    expect(backdrop?.style.background).toBe('');
+    // A sheet that isn't modal has no backdrop, Admin's or its own.
+    expect(document.querySelector('[data-state="open"].fixed.inset-0')).toBeNull();
     await act(async () => {
       fireEvent.pointerDown(screen.getByText('More'), { button: 0, pointerType: 'mouse' });
       fireEvent.click(screen.getByText('More'));

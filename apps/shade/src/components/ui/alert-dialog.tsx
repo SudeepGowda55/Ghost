@@ -1,12 +1,13 @@
 import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 
-import { overlayTint, useHostedModal, useModalOpen } from '@/lib/app-overlay';
+import { AppOverlayContext, overlayTint, useHostedModal, useModalOpen } from '@/lib/app-overlay';
 import { cn } from '@/lib/utils';
 import type { ButtonProps } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { useShade } from '@/providers/shade-context';
 import { ShadeScope } from '@/shade-scope';
+import { hasSafeArea } from '@/lib/safe-area';
 
 const AlertDialog = (props: React.ComponentProps<typeof AlertDialogPrimitive.Root>) => {
   const [rootProps, provideOpen] = useModalOpen(props);
@@ -47,6 +48,7 @@ const AlertDialogContent = React.forwardRef<
   // In an app inside Ghost Admin, the alert dialog renders in the app's overlay, over all of
   // Admin, and Admin draws the backdrop, which shows through the alert dialog's own.
   const { container, overlayStyle, ref: contentRef, wrap } = useHostedModal('dialog', ref);
+  const inApp = React.useContext(AppOverlayContext) !== undefined || hasSafeArea();
   return (
     <AlertDialogPortal container={container}>
       <ShadeScope>
@@ -59,7 +61,15 @@ const AlertDialogContent = React.forwardRef<
           <AlertDialogPrimitive.Content
             ref={contentRef}
             className={cn(
-              'fixed top-[20%] left-[50%] z-[1100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-20%] gap-6 bg-surface-elevated-2 p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-[18%] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-[18%] sm:rounded-lg',
+              'fixed top-[20%] left-[50%] z-[1100] grid max-w-lg translate-y-[-20%] gap-6 bg-surface-elevated-2 p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-[18%] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-[18%] sm:rounded-lg',
+              // Centred on the window, as far as the safe area a Ghost app's SDK sets lets it,
+              // as a dialog is.
+              'w-[calc(100%_-_var(--ghost-safe-area-inset-left,0px)_-_var(--ghost-safe-area-inset-right,0px))]',
+              'translate-x-[calc(-50%_+_clamp(var(--ghost-safe-area-inset-left,0px)_-_50vw_+_50%,0px,50vw_-_var(--ghost-safe-area-inset-right,0px)_-_50%))]',
+              // In an app, it also moves only as far as it must to stay between the safe area's
+              // top and bottom, and scrolls inside when it's taller than that.
+              (container !== undefined || inApp) &&
+                'max-h-[calc(100dvh_-_var(--ghost-safe-area-inset-top,0px)_-_var(--ghost-safe-area-inset-bottom,0px)_-_1rem)] translate-y-[clamp(var(--ghost-safe-area-inset-top,0px)_-_20dvh,-20%,80dvh_-_var(--ghost-safe-area-inset-bottom,0px)_-_1rem_-_100%)] overflow-y-auto',
               className,
             )}
             {...props}

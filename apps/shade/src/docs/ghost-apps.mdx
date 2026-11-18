@@ -99,15 +99,13 @@ import {ShadeApp} from '@tryghost/shade/app';
 </ShadeApp>
 ```
 
-Pass the app SDK's `ghost.overlay` as `overlay`. Shade's dialogs, alert dialogs and sheets then cover all of Admin, as Admin's own do, rather than only the app's page, and the menus, popovers, selects and tooltips inside them follow. They sit where Admin's own would: a dialog centred on the window, whichever way Admin's sidebar is, and a sheet against the window's right edge. Admin shows only the part of the window the dialog or sheet on top fills, so keep a dialog's content, and anything it opens, within its panel's width. A sheet on another side, and anything without `overlay`, renders in the page.
+Pass the app SDK's `ghost.overlay` as `overlay`. Shade's dialogs, alert dialogs and sheets then render over Admin's tint, which covers all of Admin, rather than only over the app's page, and the menus, popovers, selects and tooltips inside them follow. They lay out against the whole window, as Admin's own do, but Admin shows only the app's safe area of it, the part its page has to itself, as described under Page frame and margins below. So a dialog sits centred on the window, moving only as far as it must to stay in the safe area, a sheet docks at the safe area's edge, and a dialog that scrolls as a page does scrolls inside the safe area. Anything without `overlay` renders in the page.
 
 Passing `overlay` doesn't guarantee a dialog covers Admin. A dialog renders in the page instead when:
 
 - Admin hasn't just seen the publisher click or type in the app, such as for a dialog the app opens as it loads. Admin refuses to show the overlay then, so an app can't cover Admin unprompted.
 - The overlay hasn't loaded yet, which it does once the app has started.
 - Admin is too old to have an overlay.
-
-Opening a sheet on another side from a dialog in the overlay doesn't work yet: the sheet renders in the overlay, where Admin doesn't show it.
 
 `ShadeApp` also renders the toaster. Show toasts with `toast` from `@tryghost/shade/components`, such as `toast.success('Saved')`. Don't add `sonner` as a dependency: a second copy of it shows nothing.
 
@@ -170,7 +168,7 @@ import {Container} from '@tryghost/shade/primitives';
 
 The flex column lets `ListPage` grow to fill the safe area, so an empty state in `ListPage.Body` can centre itself. The minimum height stands in for Admin's `h-full`, because nothing above the container in the frame has a height.
 
-Add no outer padding or margin of your own, on `body`, `ShadeApp` or the container. The page's margins then stay right if Admin changes how much space it leaves around the page. Something fixed to the page's edges, such as a toolbar along the bottom, keeps inside the safe area with the variables, such as `bottom-[var(--ghost-safe-area-inset-bottom,0px)]`. A backdrop that should show beneath the chrome can fill the whole frame.
+Add no outer padding or margin of your own, on `body`, `ShadeApp` or the container. The page's margins then stay right if Admin changes how much space it leaves around the page. Something fixed to the page's edges, such as a toolbar along the bottom, keeps inside the safe area with the variables, such as `bottom-[var(--ghost-safe-area-inset-bottom,0px)]`. A backdrop that should show beneath the chrome can fill the whole frame. A sheet that sets its own width, such as `sm:max-w-[420px]`, replaces the cap that keeps it inside the safe area, so include it: `sm:max-w-[min(420px,calc(100vw-var(--ghost-safe-area-inset-left,0px)-var(--ghost-safe-area-inset-right,0px)))]`.
 
 ## Start from a page template
 

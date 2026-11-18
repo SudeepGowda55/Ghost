@@ -6,9 +6,10 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 
-import { overlayTint, useHostedModal, useModalOpen } from '@/lib/app-overlay';
+import { AppOverlayContext, overlayTint, useHostedModal, useModalOpen } from '@/lib/app-overlay';
 import { cn } from '@/lib/utils';
 import { ShadeScope } from '@/shade-scope';
+import { hasSafeArea } from '@/lib/safe-area';
 
 // Radix keeps whether a sheet is modal to itself, and only a modal one covers Admin.
 const SheetModalContext = React.createContext(true);
@@ -44,17 +45,20 @@ const SheetOverlay = React.forwardRef<
 ));
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
+// Each side docks at the edge of the safe area a Ghost app's SDK sets as
+// `--ghost-safe-area-inset-*`, clear of Admin's chrome. Anywhere else the variables aren't set,
+// and it docks at the window's edge.
 const sheetVariants = cva(
   'fixed z-50 gap-4 bg-surface-elevated p-8 shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-500',
   {
     variants: {
       side: {
-        top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
+        top: 'top-[var(--ghost-safe-area-inset-top,0px)] right-[var(--ghost-safe-area-inset-right,0px)] left-[var(--ghost-safe-area-inset-left,0px)] border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
         bottom:
-          'inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
-        left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
+          'right-[var(--ghost-safe-area-inset-right,0px)] bottom-[var(--ghost-safe-area-inset-bottom,0px)] left-[var(--ghost-safe-area-inset-left,0px)] border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
+        left: 'top-[var(--ghost-safe-area-inset-top,0px)] bottom-[var(--ghost-safe-area-inset-bottom,0px)] left-[var(--ghost-safe-area-inset-left,0px)] w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
         right:
-          'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+          'top-[var(--ghost-safe-area-inset-top,0px)] right-[var(--ghost-safe-area-inset-right,0px)] bottom-[var(--ghost-safe-area-inset-bottom,0px)] w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
       },
     },
     defaultVariants: {
@@ -73,15 +77,14 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(({ side = 'right', className, children, ...props }, ref) => {
   // In an app inside Ghost Admin, the sheet renders in the app's overlay, over all of Admin,
-  // and Admin draws the backdrop, which shows through the sheet's own. Admin shows sheets only
-  // against the window's right edge, as its own are, so a sheet on another side stays in the page.
+  // and Admin draws the backdrop, which shows through the sheet's own. Whichever its side, it
+  // docks at the edge of the safe area the app SDK sets, which Admin's chrome is outside of.
   const modal = React.useContext(SheetModalContext);
-  const {
-    container,
-    overlayStyle,
-    ref: contentRef,
-    wrap,
-  } = useHostedModal('sheet', ref, modal && side === 'right');
+  const { container, overlayStyle, ref: contentRef, wrap } = useHostedModal('sheet', ref, modal);
+  // In an app, in its overlay or its page, where the sheet docks inside the safe area.
+  // In an app: one that passes `overlay` to ShadeApp, or one whose SDK set the safe area.
+  const inApp =
+    React.useContext(AppOverlayContext) !== undefined || container !== undefined || hasSafeArea();
   return (
     <SheetPortal container={container}>
       <ShadeScope>
@@ -89,10 +92,29 @@ const SheetContent = React.forwardRef<
         {wrap(
           <SheetPrimitive.Content
             ref={contentRef}
-            className={cn(sheetVariants({ side }), className)}
+            className={cn(
+              sheetVariants({ side }),
+              // In an app, it also scrolls inside the safe area when it's taller than that.
+              inApp && 'overflow-y-auto',
+              inApp &&
+                (side === 'top' || side === 'bottom') &&
+                'max-h-[calc(100dvh_-_var(--ghost-safe-area-inset-top,0px)_-_var(--ghost-safe-area-inset-bottom,0px))]',
+              // And it's never wider than the safe area.
+              inApp &&
+                (side === 'left' || side === 'right') &&
+                'max-w-[calc(100vw_-_var(--ghost-safe-area-inset-left,0px)_-_var(--ghost-safe-area-inset-right,0px))] sm:max-w-[min(var(--container-sm),calc(100vw_-_var(--ghost-safe-area-inset-left,0px)_-_var(--ghost-safe-area-inset-right,0px)))]',
+              className,
+            )}
             {...props}
           >
-            <SheetPrimitive.Close className="fixed top-4 right-4 z-50 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-secondary">
+            <SheetPrimitive.Close
+              className={cn(
+                'top-4 right-4 z-50 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-secondary',
+                // In an app, against the sheet's own corner on whichever side it docks. Outside
+                // one, against the window's, so it stays put as the sheet scrolls.
+                inApp ? 'absolute' : 'fixed',
+              )}
+            >
               <X className="size-4" />
               <span className="sr-only">Close</span>
             </SheetPrimitive.Close>

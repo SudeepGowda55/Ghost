@@ -170,8 +170,7 @@ export function useHostedModal<T extends HTMLElement>(
     setPlaced(placement);
   }
   const { container } = placement;
-  // A dialog that stops being modal while open, such as a sheet moved off the right edge, leaves
-  // the overlay too.
+  // A dialog that stops being modal while open leaves the overlay too.
   const hosted = modal && container !== undefined;
 
   // The ref stays the same function for the dialog's whole life: a new one would make React

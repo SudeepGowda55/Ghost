@@ -65,7 +65,9 @@ const DialogContent = React.forwardRef<
   // and Admin draws the backdrop, which shows through the dialog's own.
   const { container, overlayStyle, ref: contentRef, wrap } = useHostedModal('dialog', ref, modal);
 
-  const panel = (
+  // The overlay's context goes around the content, not inside it, so an `asChild` content's own
+  // element stays the one Radix gives the dialog's role, handlers and ref.
+  const panel = wrap(
     <DialogPrimitive.Content
       ref={contentRef}
       className={cn(
@@ -77,8 +79,8 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      {wrap(children)}
-    </DialogPrimitive.Content>
+      {children}
+    </DialogPrimitive.Content>,
   );
 
   // The space around the dialog is padding on this wrapper, not on the scroll container:

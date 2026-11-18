@@ -101,6 +101,14 @@ import {ShadeApp} from '@tryghost/shade/app';
 
 Pass the app SDK's `ghost.overlay` as `overlay`. Shade's dialogs, alert dialogs and sheets then cover all of Admin, as Admin's own do, rather than only the app's page, and the menus, popovers, selects and tooltips inside them follow. They sit where Admin's own would: a dialog centred on the window, whichever way Admin's sidebar is, and a sheet against the window's right edge. Admin shows only the part of the window the dialog or sheet on top fills, so keep a dialog's content, and anything it opens, within its panel's width. A sheet on another side, and anything without `overlay`, renders in the page.
 
+Passing `overlay` doesn't guarantee a dialog covers Admin. A dialog renders in the page instead when:
+
+- Admin hasn't just seen the publisher click or type in the app, such as for a dialog the app opens as it loads. Admin refuses to show the overlay then, so an app can't cover Admin unprompted.
+- The overlay hasn't loaded yet, which it does once the app has started.
+- Admin is too old to have an overlay.
+
+Opening a sheet on another side from a dialog in the overlay doesn't work yet: the sheet renders in the overlay, where Admin doesn't show it.
+
 `ShadeApp` also renders the toaster. Show toasts with `toast` from `@tryghost/shade/components`, such as `toast.success('Saved')`. Don't add `sonner` as a dependency: a second copy of it shows nothing.
 
 Leave `admin7Design` at its default. It mirrors Admin's `admin7Design` Labs flag while Admin 7 rolls out; an app always gets the Admin 7 design.

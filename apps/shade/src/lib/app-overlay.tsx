@@ -126,7 +126,7 @@ export interface HostedModal<T extends HTMLElement> {
   overlayStyle: React.CSSProperties | undefined;
   /** The ref for the dialog's content element, merged with the caller's own. */
   ref: React.RefCallback<T>;
-  /** Wraps the dialog's children, so content they portal goes to the overlay too. */
+  /** Wraps the dialog's content element, so content it portals goes to the overlay too. */
   wrap: (children: React.ReactNode) => React.ReactNode;
 }
 
@@ -170,7 +170,9 @@ export function useHostedModal<T extends HTMLElement>(
     setPlaced(placement);
   }
   const { container } = placement;
-  const hosted = container !== undefined;
+  // A dialog that stops being modal while open, such as a sheet moved off the right edge, leaves
+  // the overlay too.
+  const hosted = modal && container !== undefined;
 
   // The ref stays the same function for the dialog's whole life: a new one would make React
   // detach and attach the content again, which would release the overlay and hold it again. It

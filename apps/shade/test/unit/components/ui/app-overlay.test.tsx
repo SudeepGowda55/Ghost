@@ -11,6 +11,12 @@ import {
   DialogTrigger,
 } from '../../../../src/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from '../../../../src/components/ui/alert-dialog';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -187,6 +193,70 @@ describe('a dialog in an app’s overlay', () => {
     const sheet = await screen.findByTestId('sheet');
     expect(fake.container.contains(sheet)).toBe(false);
     expect(fake.holds.length).toBe(0);
+  });
+
+  it('moves an open sheet to the page when it moves off the right edge, with its popovers', async () => {
+    const Probe = ({ side }: { side: 'right' | 'left' }) => (
+      <ShadeApp darkMode={false} overlay={fake.overlay}>
+        <Sheet open>
+          <SheetContent data-testid="sheet" side={side}>
+            <SheetTitle>Settings</SheetTitle>
+            <SheetDescription>Description</SheetDescription>
+            <Popover>
+              <PopoverTrigger>More</PopoverTrigger>
+              <PopoverContent data-testid="popover">Popover</PopoverContent>
+            </Popover>
+          </SheetContent>
+        </Sheet>
+      </ShadeApp>
+    );
+    const { rerender } = render(<Probe side="right" />);
+    expect(fake.container.contains(await screen.findByTestId('sheet'))).toBe(true);
+
+    rerender(<Probe side="left" />);
+
+    const sheet = await screen.findByTestId('sheet');
+    expect(fake.container.contains(sheet)).toBe(false);
+    expect(fake.holds[0].released).toBe(true);
+    expect(fake.holds.length).toBe(1);
+    const backdrop = document.querySelector<HTMLElement>('[data-state="open"].fixed.inset-0');
+    expect(backdrop?.style.background).toBe('');
+    await act(async () => {
+      fireEvent.pointerDown(screen.getByText('More'), { button: 0, pointerType: 'mouse' });
+      fireEvent.click(screen.getByText('More'));
+    });
+    expect(fake.container.contains(await screen.findByTestId('popover'))).toBe(false);
+  });
+
+  it('gives a dialog’s role and hold to the element an `asChild` content renders', async () => {
+    render(
+      <ShadeApp darkMode={false} overlay={fake.overlay}>
+        <Dialog open>
+          <DialogContent asChild>
+            <section data-testid="dialog">
+              <DialogTitle>Title</DialogTitle>
+              <DialogDescription>Description</DialogDescription>
+            </section>
+          </DialogContent>
+        </Dialog>
+        <AlertDialog open>
+          <AlertDialogContent asChild>
+            <section data-testid="alert">
+              <AlertDialogTitle>Title</AlertDialogTitle>
+              <AlertDialogDescription>Description</AlertDialogDescription>
+            </section>
+          </AlertDialogContent>
+        </AlertDialog>
+      </ShadeApp>,
+    );
+
+    const dialog = await screen.findByTestId('dialog');
+    const alert = await screen.findByTestId('alert');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(alert.getAttribute('role')).toBe('alertdialog');
+    expect(fake.container.contains(dialog)).toBe(true);
+    expect(fake.container.contains(alert)).toBe(true);
+    expect(fake.holds.map((hold) => hold.element)).toEqual(expect.arrayContaining([dialog, alert]));
   });
 
   it('leaves a non-modal dialog in the page, which stays usable around it', async () => {

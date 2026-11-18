@@ -55,16 +55,18 @@ const AlertDialogContent = React.forwardRef<
           style={overlayStyle}
           onClick={(e) => e.stopPropagation()}
         />
-        <AlertDialogPrimitive.Content
-          ref={contentRef}
-          className={cn(
-            'fixed top-[20%] left-[50%] z-[1100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-20%] gap-6 bg-surface-elevated-2 p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-[18%] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-[18%] sm:rounded-lg',
-            className,
-          )}
-          {...props}
-        >
-          {wrap(children)}
-        </AlertDialogPrimitive.Content>
+        {wrap(
+          <AlertDialogPrimitive.Content
+            ref={contentRef}
+            className={cn(
+              'fixed top-[20%] left-[50%] z-[1100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-20%] gap-6 bg-surface-elevated-2 p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-top-[18%] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-top-[18%] sm:rounded-lg',
+              className,
+            )}
+            {...props}
+          >
+            {children}
+          </AlertDialogPrimitive.Content>,
+        )}
       </ShadeScope>
     </AlertDialogPortal>
   );

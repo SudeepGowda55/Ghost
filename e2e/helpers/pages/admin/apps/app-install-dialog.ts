@@ -8,6 +8,12 @@ export class AppInstallDialog {
   public readonly notice: Locator;
   /** What changed, for an app the site already has, one row per field. */
   public readonly changes: Locator;
+  /** One line per resource the app asks for. */
+  public readonly accessItems: Locator;
+  /** The scopes the app's backend may use on its own, shown apart with a warning. */
+  public readonly backendAccess: Locator;
+  /** What an approval would change in the app's access, for an app the site already has. */
+  public readonly accessChanges: Locator;
   public readonly installButton: Locator;
   public readonly approveChangesButton: Locator;
   public readonly cancelButton: Locator;
@@ -16,6 +22,9 @@ export class AppInstallDialog {
     this.modal = page.getByTestId(sel.appInstallDialog);
     this.notice = this.modal.getByTestId(sel.appInstallNotice);
     this.changes = this.modal.getByTestId(sel.appManifestChange);
+    this.accessItems = this.modal.getByTestId(sel.accessItem);
+    this.backendAccess = this.modal.getByTestId(sel.appBackendAccess);
+    this.accessChanges = this.modal.getByTestId(sel.appAccessChanges);
     this.installButton = this.modal.getByRole('button', { name: sel.installButton, exact: true });
     this.approveChangesButton = this.modal.getByRole('button', {
       name: sel.approveChangesButton,

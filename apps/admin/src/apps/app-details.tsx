@@ -33,7 +33,12 @@ import { useBrowseSettings } from '@tryghost/admin-x-framework/api/settings';
 import { getErrorMessage } from '@tryghost/admin-x-framework/errors';
 import { getSiteTimezone } from '@tryghost/admin-x-framework/utils/get-site-timezone';
 import { NotFound } from '@/shared/not-found';
-import { AccessIndicator, OPENED_APP_ACCESS_INTRO } from './components/access-indicator';
+import {
+  AccessChanges,
+  AccessIndicator,
+  OPENED_APP_ACCESS_INTRO,
+} from './components/access-indicator';
+import { describeAccessChanges } from './lib/access-changes';
 import { AppIcon } from './components/app-icon';
 import { AppsGate } from './components/apps-gate';
 import { PinMenuItem } from './components/pin-menu-item';
@@ -88,6 +93,12 @@ const StatusBadges: React.FC<{ installation: AppInstallation }> = ({ installatio
   </>
 );
 
+/** What an entry changed in the app's access, in the review screen's words. */
+const EntryAccessChanges: React.FC<{ entry: AppInstallationHistoryEntry }> = ({ entry }) => {
+  const groups = describeAccessChanges((entry.changes ?? []).filter((change) => 'scope' in change));
+  return groups.length > 0 ? <AccessChanges groups={groups} /> : null;
+};
+
 const History: React.FC<{ entries: AppInstallationHistoryEntry[]; timezone: string }> = ({
   entries,
   timezone,
@@ -99,17 +110,20 @@ const History: React.FC<{ entries: AppInstallationHistoryEntry[]; timezone: stri
         className="py-3 in-data-[admin7-design=true]:py-4 in-data-[admin7-design=true]:first:pt-0"
         data-testid="app-history-entry"
       >
-        <Inline align="baseline" gap="md" justify="between">
-          <span className="text-sm in-data-[admin7-design=true]:text-md">
-            {historyTitle(entry)}
-            {entry.actor?.name && (
-              <span className="text-muted-foreground"> by {entry.actor.name}</span>
-            )}
-          </span>
-          <span className="shrink-0 text-xs text-muted-foreground in-data-[admin7-design=true]:text-base">
-            {formatDisplayDate(entry.created_at, timezone)}
-          </span>
-        </Inline>
+        <Stack gap="sm">
+          <Inline align="baseline" gap="md" justify="between">
+            <span className="text-sm in-data-[admin7-design=true]:text-md">
+              {historyTitle(entry)}
+              {entry.actor?.name && (
+                <span className="text-muted-foreground"> by {entry.actor.name}</span>
+              )}
+            </span>
+            <span className="shrink-0 text-xs text-muted-foreground in-data-[admin7-design=true]:text-base">
+              {formatDisplayDate(entry.created_at, timezone)}
+            </span>
+          </Inline>
+          <EntryAccessChanges entry={entry} />
+        </Stack>
       </li>
     ))}
   </ol>

@@ -3,10 +3,11 @@ import { Button, DialogFooter } from '@tryghost/shade/components';
 import { Stack } from '@tryghost/shade/primitives';
 import type { AppInstallationPreview } from '@tryghost/admin-x-framework/api/app-installations';
 import { NoticeBanner, ReviewHeader, ReviewSeparator } from './review-header';
-import { AccessIndicator } from '@/apps/components/access-indicator';
+import { AccessChanges, AccessIndicator } from '@/apps/components/access-indicator';
 import { ManifestChanges } from '@/apps/components/manifest-changes';
 import { SectionEyebrow } from '@/apps/components/section-eyebrow';
 import { CapabilitySummary } from '@/apps/components/surface-icon';
+import { describeAccessChanges } from '@/apps/lib/access-changes';
 import { describeChanges } from '@/apps/lib/changes';
 
 interface ReviewProps {
@@ -30,14 +31,15 @@ export const Review: React.FC<ReviewProps> = ({
 }) => {
   const { manifest, installation } = preview;
   const name = installation?.manifest.name;
-  // Access changes are shown with the app's access, not among the field rows.
+  const changes = installation?.changes ?? [];
   const rows = installation
     ? describeChanges(
         installation,
         preview,
-        installation.changes.filter((change) => 'path' in change),
+        changes.filter((change) => 'path' in change),
       )
     : [];
+  const accessChanges = describeAccessChanges(changes.filter((change) => 'scope' in change));
   return (
     <>
       <ReviewHeader
@@ -56,6 +58,12 @@ export const Review: React.FC<ReviewProps> = ({
         <Stack gap="sm">
           <SectionEyebrow>What changed</SectionEyebrow>
           <ManifestChanges rows={rows} />
+        </Stack>
+      )}
+      {accessChanges.length > 0 && (
+        <Stack gap="sm">
+          <SectionEyebrow>What changed in access</SectionEyebrow>
+          <AccessChanges groups={accessChanges} />
         </Stack>
       )}
       <AccessIndicator manifest={manifest} />

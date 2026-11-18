@@ -1551,6 +1551,48 @@ describe('Managing apps', () => {
     expect(new URL(readApi.requests[0].url).searchParams.get('include')).toBe('history');
   });
 
+  it('describes each change to access in its history entry, in the review screen’s words', async () => {
+    fakeDetails(
+      installation({
+        manifest: manifest({
+          access: [
+            { name: 'post:browse', backend: true },
+            { name: 'post:edit', backend: false },
+          ],
+        }),
+        history: [
+          entry('h2', 'changes_approved', '2026-10-02T10:00:00.000Z', {
+            changes: [
+              { scope: 'post:edit', change: 'added', backend: false },
+              { scope: 'tier:browse', change: 'removed', backend: false },
+            ],
+          }),
+          {
+            ...installedOn('2026-10-01T10:00:00.000Z'),
+            changes: [{ scope: 'post:browse', change: 'added', backend: true }],
+          },
+        ],
+      }),
+    );
+
+    await renderAdminApp(DETAILS_ROUTE, { labs });
+
+    await expect
+      .element(appsScreen.historyEntries().nth(0))
+      .toHaveTextContent(
+        /New access\s*Posts and pages\s*Edit, publish and email posts and pages, change who can read them and create tags for them\.\s*No longer has\s*Tiers/,
+      );
+    await expect
+      .element(appsScreen.historyEntries().nth(1))
+      .toHaveTextContent(
+        /New access\s*Posts and pages\s*List and search posts and pages\.\s*New for its backend, at any time/,
+      );
+    // The permissions list the backend's scopes apart, with their warning.
+    await expect
+      .element(appsScreen.backendAccess())
+      .toHaveTextContent('even when nobody has the app open');
+  });
+
   it('shows the app’s name large under the breadcrumb, with its badges and description, in Admin 7', async () => {
     // Admin 7's sidebar shows the site's member count and revenue.
     fakeAdminStats.memberCount();

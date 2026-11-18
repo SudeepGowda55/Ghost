@@ -3,6 +3,7 @@ import { page } from 'vitest/browser';
 import type {
   AppInstallation,
   AppInstallationPreview,
+  AppManifest,
 } from '@tryghost/admin-x-framework/api/app-installations';
 import {
   currentRoute,
@@ -23,6 +24,13 @@ import {
   labs,
   manifest,
 } from './apps.test-utils';
+
+/** Reads and edits posts, reading on its own too, and lists tags. */
+const ACCESS: AppManifest['access'] = [
+  { name: 'post:browse', backend: true },
+  { name: 'post:edit', backend: false },
+  { name: 'tag:browse', backend: false },
+];
 
 const INSTALL_ROUTE = `/apps/install?manifest=${encodeURIComponent(MANIFEST_URL)}`;
 
@@ -96,7 +104,9 @@ describe('Installing an app', () => {
 
   it('shows who the app is and where it runs, and installs the version reviewed', async () => {
     const installations = fakeInstallations();
-    const previewApi = fakePreview(previewResponse(preview()));
+    const previewApi = fakePreview(
+      previewResponse(preview({ manifest: manifest({ access: ACCESS }) })),
+    );
     const installApi = fakeAdminEndpoint('POST', '/apps/installations/', () => {
       installations.set([installation()]);
       return { app_installations: [installation()] };
@@ -120,12 +130,28 @@ describe('Installing an app', () => {
     await expect
       .element(appsScreen.accessIndicator())
       .toHaveTextContent('The app acts as whoever opens it, within their role.');
-    await expect(appsScreen.accessItems()).toHaveCount(6);
-    // Where the app's data goes closes the box, but isn't one of the permissions
-    await expect(appsScreen.accessIndicator().getByRole('listitem')).toHaveCount(6);
+    // One line per resource the app declares, in Ghost's words.
+    await expect(appsScreen.accessItems()).toHaveCount(2);
     await expect
       .element(appsScreen.accessItems().first())
-      .toHaveTextContent('View, create, edit, publish and delete posts and pages');
+      .toHaveTextContent(
+        'Posts and pagesList and search posts and pages.Edit, publish and email posts and pages, change who can read them and create tags for them.',
+      );
+    await expect
+      .element(appsScreen.accessItems().nth(1))
+      .toHaveTextContent('TagsList and search tags.');
+    // What its backend can use on its own, apart, with a warning.
+    await expect
+      .element(appsScreen.backendAccess())
+      .toHaveTextContent('can use these at any time, even when nobody has the app open');
+    await expect(appsScreen.backendAccessItems()).toHaveCount(1);
+    await expect
+      .element(appsScreen.backendAccessItems().first())
+      .toHaveTextContent('Posts and pagesList and search posts and pages.');
+    // Where the app's data goes closes the box, but isn't one of the permissions.
+    await expect(
+      appsScreen.accessIndicator().getByRole('listitem').filter({ hasText: 'Data accessed by' }),
+    ).toHaveCount(0);
     // What the app does: where it appears, and, with its permissions, where what it reads goes.
     await expect(appsScreen.capabilities()).toHaveCount(1);
     await expect
@@ -153,6 +179,60 @@ describe('Installing an app', () => {
     await expect.poll(currentRoute).toBe('/apps');
     await expect(appsScreen.rows()).toHaveCount(1);
     await expect.element(appsScreen.row('Podcast')).toHaveTextContent('Example Audio');
+  });
+
+  it('says when an app asks for no access, with no backend section', async () => {
+    fakeInstallations();
+    fakePreview(previewResponse(preview()));
+
+    await renderAdminApp(INSTALL_ROUTE, { labs });
+
+    await expect.element(appsScreen.noAccess()).toBeVisible();
+    await expect(appsScreen.accessItems()).toHaveCount(0);
+    await expect.element(appsScreen.backendAccess()).not.toBeInTheDocument();
+  });
+
+  it('shows what changed in access when approving an installed app’s changes', async () => {
+    fakeInstallations([installation()]);
+    fakePreview(
+      previewResponse(
+        preview({
+          manifest: manifest({ access: ACCESS }),
+          digest: 'digest-2',
+          installation: {
+            ...existing([
+              { scope: 'post:browse', change: 'backend_added', backend: true },
+              { scope: 'post:edit', change: 'added', backend: false },
+              { scope: 'tier:browse', change: 'removed', backend: false },
+            ]),
+            manifest: manifest({
+              access: [
+                { name: 'post:browse', backend: false },
+                { name: 'tag:browse', backend: false },
+                { name: 'tier:browse', backend: false },
+              ],
+            }),
+          },
+        }),
+      ),
+    );
+
+    await renderAdminApp(INSTALL_ROUTE, { labs });
+
+    const changes = appsScreen.accessChanges();
+    await expect
+      .element(changes.getByTestId('app-access-added'))
+      .toHaveTextContent('New accessPosts and pagesEdit, publish and email posts and pages');
+    await expect
+      .element(changes.getByTestId('app-access-backend_added'))
+      .toHaveTextContent(
+        'New for its backend, at any timePosts and pagesList and search posts and pages.',
+      );
+    await expect
+      .element(changes.getByTestId('app-access-removed'))
+      .toHaveTextContent('No longer hasTiersList your tiers and their prices.');
+    // Access isn't repeated among the field-by-field changes.
+    await expect(appsScreen.changes()).toHaveCount(0);
   });
 
   it('shows the app’s own icon from the copy Ghost would store, never from the app', async () => {

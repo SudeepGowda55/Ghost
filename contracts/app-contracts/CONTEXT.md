@@ -232,10 +232,13 @@ _Avoid_: proxy, API access, app token
 
 **Allowlist**:
 The Admin API routes the fetch escape hatch allows, by method, grouped under
-the scope names Permissions and auth will use (`posts:read`, `posts:write`),
-in `ADMIN_API_ALLOWLIST`. Everything else is refused. Writes of posts, pages
-and tags are also checked so they can't send email, set code injection or
-write mobiledoc. It stands in for apps' own token, which takes the scopes over.
+the scope registry's names (`post:browse`, `post:edit`), in
+`ADMIN_API_ALLOWLIST`; the site's public details need no scope. Everything else
+is refused, and so is a route, an `include` or a sort whose scope the
+installation wasn't approved for: how a post performed needs
+`post:read_stats`. Writes of posts, pages and tags are also checked so they
+can't send email, set code injection or write mobiledoc. It stands in for apps'
+own token: the server checks nothing an app does through the bridge.
 _Avoid_: permissions, blocklist, denylist
 
 **Feature name**:

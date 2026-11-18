@@ -53,6 +53,14 @@ test.describe('Ghost Admin - App access approval', () => {
     await expect(appPage.frame).toBeVisible();
     const installationId = appPage.installationId();
 
+    // The app reaches only what it was approved for.
+    await appPage.app.callAdminApi('/posts/');
+    await expect(appPage.app.result).toHaveText(/^200 /);
+    await appPage.app.callAdminApi('/tags/');
+    await expect(appPage.app.result).toHaveText(
+      "blocked: This app wasn't approved for tag:browse, which GET /tags/ needs",
+    );
+
     expect(await storedInstallation(page.request, installationId)).toMatchObject({
       status: 'active',
       manifest: { access: [{ name: 'post:browse', backend: true }] },

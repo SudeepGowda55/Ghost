@@ -27,7 +27,33 @@ describe('createAdminApiFetch', () => {
     vi.clearAllMocks();
   });
 
-  const adminApiFetch = createAdminApiFetch({ apiRoot: new URL(API_ROOT), ghostVersion: '6.0' });
+  const adminApiFetch = createAdminApiFetch({
+    apiRoot: new URL(API_ROOT),
+    approvedScopes: new Set(['post:browse', 'post:add', 'post:edit', 'tag:browse']),
+    ghostVersion: '6.0',
+  });
+
+  it('refuses a call the installation wasn’t approved for, before sending anything', async () => {
+    await expect(adminApiFetch({ path: '/tiers/' }, session.signal)).rejects.toThrow(
+      "This app wasn't approved for tier:browse, which GET /tiers/ needs",
+    );
+    await expect(
+      adminApiFetch({ path: '/posts/?include=count.clicks' }, session.signal),
+    ).rejects.toMatchObject({ code: 'blocked' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('includes how posts performed for an app approved for post:read_stats', async () => {
+    fetchMock.mockResolvedValue(new Response('{}'));
+    const withStats = createAdminApiFetch({
+      apiRoot: new URL(API_ROOT),
+      approvedScopes: new Set(['post:browse', 'post:read_stats']),
+    });
+
+    await withStats({ path: '/posts/?include=email,count.clicks' }, session.signal);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   it('sends Admin’s own headers and drops any the app set to replace them', async () => {
     fetchMock.mockResolvedValue(new Response('{}'));

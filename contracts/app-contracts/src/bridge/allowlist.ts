@@ -1,3 +1,4 @@
+import type { AppScopeName } from '../scopes.ts';
 import type { FetchMethod } from './rules.ts';
 
 /**
@@ -5,8 +6,10 @@ import type { FetchMethod } from './rules.ts';
  * refused.
  *
  * Apps call the Admin API with the staff user's own session. This list stands in for an
- * app-scoped token with permissions, which comes with Permissions and auth. The routes are
- * grouped under the scope names that work will use, so it can take them over as they are.
+ * app-scoped token with permissions, which checks on the server what was approved. Its routes
+ * are grouped under the scope registry's names, and `checkAdminApiRequest` refuses a route whose
+ * scope the installation wasn't approved for, as Admin holds the approved manifest while the app
+ * runs. It is still a stopgap: the server checks nothing an app does through the bridge.
  *
  * What's allowed, and why:
  *
@@ -19,10 +22,12 @@ import type { FetchMethod } from './rules.ts';
  * - The search index of posts, pages and tags, and slug generation, which Admin's own editor
  *   uses to pick a slug before saving.
  * - The site's public details: its title, description, logo, icon, cover image and accent
- *   colour, for showing the site's branding.
+ *   colour, for showing the site's branding. They need no scope.
+ * - How a post performed, through the includes and sort fields that reach it, only with
+ *   `post:read_stats`.
  *
  * Writes of posts, pages and tags are checked further, so an app can't ask Ghost to email a post,
- * set code injection or write mobiledoc: a write may carry only the query parameters its scope
+ * set code injection or write mobiledoc: a write may carry only the query parameters its group
  * lists, which leaves out `newsletter`, `email_segment` and `source`, and `refusedContent`
  * checks its body.
  * These checks are a stopgap for the private beta behind a flag. The security review re-reviews
@@ -49,20 +54,29 @@ import type { FetchMethod } from './rules.ts';
  * the path as it arrives, so `/posts/sl%75g/…` doesn't reach the slug route.
  */
 
-export interface AdminApiScope {
-  /** The scope's name, as Permissions and auth will name it, such as `posts:write`. */
-  readonly name: string;
-  /** What the scope lets an app do. */
-  readonly description: string;
+export interface AdminApiRouteGroup {
+  /**
+   * The registry scope these routes stand for, such as `post:edit`, or `null` for routes any app
+   * may call.
+   */
+  readonly scope: AppScopeName | null;
   /** Each route as `METHOD /path`, relative to the Admin API root. */
   readonly routes: readonly string[];
   /**
-   * The only query parameters a request in this scope may carry, by exact name. Any other name
+   * The only query parameters a request in this group may carry, by exact name. Any other name
    * is refused, so a spelling Ghost's query parser reads differently, such as `[newsletter]`,
-   * can't slip a parameter past the check. A scope without this list allows any parameter.
+   * can't slip a parameter past the check. A group without this list allows any parameter.
    */
   readonly allowedParameters?: readonly string[];
-  /** Whether a write in this scope sends content, whose body `refusedContent` checks. */
+  /**
+   * The relations `include` may name and the fields `order` sorts by that need a scope of their
+   * own, mapped to that scope, or to `null` when the group's own scope is enough. A key ending
+   * in `.*` covers every name under it. With this map, an `include` it doesn't name is refused,
+   * and an `order` field it doesn't name needs nothing more. Reading a post can include how it
+   * performed, which only `post:read_stats` gives.
+   */
+  readonly fieldScopes?: Readonly<Record<string, AppScopeName | null>>;
+  /** Whether a write in this group sends content, whose body `refusedContent` checks. */
   readonly checksContent?: true;
 }
 
@@ -71,68 +85,99 @@ export interface AdminApiScope {
 // rest of what only Admin's editor needs.
 const POST_WRITE_PARAMETERS = ['include', 'formats', 'save_revision'] as const;
 
-export const ADMIN_API_ALLOWLIST: readonly AdminApiScope[] = [
+// What Ghost's post and page routes read, minus `debug` and `collection`.
+const POST_BROWSE_PARAMETERS = [
+  'include',
+  'filter',
+  'fields',
+  'formats',
+  'limit',
+  'order',
+  'page',
+  'absolute_urls',
+] as const;
+const POST_READ_PARAMETERS = ['include', 'fields', 'formats', 'absolute_urls'] as const;
+
+// What a post or page can include or be sorted by. How it performed by email, in signups and
+// conversions, and in feedback is `post:read_stats`'s.
+const POST_FIELDS = {
+  tags: null,
+  authors: null,
+  'authors.roles': null,
+  tiers: null,
+  newsletter: null,
+  post_revisions: null,
+  'post_revisions.author': null,
+  email: 'post:read_stats',
+  'email.*': 'post:read_stats',
+  'count.*': 'post:read_stats',
+  sentiment: 'post:read_stats',
+} as const satisfies Record<string, AppScopeName | null>;
+
+export const ADMIN_API_ALLOWLIST: readonly AdminApiRouteGroup[] = [
   {
-    name: 'posts:read',
-    description: 'List and read posts, and search them.',
-    routes: ['GET /posts', 'GET /posts/:id', 'GET /posts/slug/:slug', 'GET /search-index/posts'],
+    scope: 'post:browse',
+    routes: ['GET /posts', 'GET /pages', 'GET /search-index/posts', 'GET /search-index/pages'],
+    allowedParameters: POST_BROWSE_PARAMETERS,
+    fieldScopes: POST_FIELDS,
   },
   {
-    name: 'posts:write',
-    description: 'Create, edit and delete posts, one at a time, without email or code injection.',
-    routes: ['POST /posts', 'PUT /posts/:id', 'DELETE /posts/:id'],
+    scope: 'post:read',
+    routes: ['GET /posts/:id', 'GET /posts/slug/:slug', 'GET /pages/:id', 'GET /pages/slug/:slug'],
+    allowedParameters: POST_READ_PARAMETERS,
+    fieldScopes: POST_FIELDS,
+  },
+  {
+    scope: 'post:add',
+    routes: ['POST /posts', 'POST /pages'],
     allowedParameters: POST_WRITE_PARAMETERS,
+    fieldScopes: POST_FIELDS,
     checksContent: true,
   },
   {
-    name: 'pages:read',
-    description: 'List and read pages, and search them.',
-    routes: ['GET /pages', 'GET /pages/:id', 'GET /pages/slug/:slug', 'GET /search-index/pages'],
-  },
-  {
-    name: 'pages:write',
-    description: 'Create, edit and delete pages, one at a time, without code injection.',
-    routes: ['POST /pages', 'PUT /pages/:id', 'DELETE /pages/:id'],
+    scope: 'post:edit',
+    routes: ['PUT /posts/:id', 'PUT /pages/:id'],
     allowedParameters: POST_WRITE_PARAMETERS,
+    fieldScopes: POST_FIELDS,
     checksContent: true,
   },
   {
-    name: 'tags:read',
-    description: 'List and read tags, and search them.',
-    routes: ['GET /tags', 'GET /tags/:id', 'GET /tags/slug/:slug', 'GET /search-index/tags'],
+    scope: 'post:destroy',
+    routes: ['DELETE /posts/:id', 'DELETE /pages/:id'],
+    allowedParameters: POST_WRITE_PARAMETERS,
+    fieldScopes: POST_FIELDS,
+    checksContent: true,
   },
+  { scope: 'tag:browse', routes: ['GET /tags', 'GET /search-index/tags'] },
+  { scope: 'tag:read', routes: ['GET /tags/:id', 'GET /tags/slug/:slug'] },
   {
-    name: 'tags:write',
-    description: 'Create, edit and delete tags, one at a time, without code injection.',
-    routes: ['POST /tags', 'PUT /tags/:id', 'DELETE /tags/:id'],
+    scope: 'tag:add',
+    routes: ['POST /tags'],
     allowedParameters: ['include'],
     checksContent: true,
   },
   {
-    name: 'users:read',
-    description: 'List staff users, to show who wrote something.',
-    routes: ['GET /users'],
+    scope: 'tag:edit',
+    routes: ['PUT /tags/:id'],
+    allowedParameters: ['include'],
+    checksContent: true,
   },
   {
-    name: 'tiers:read',
-    description: 'List tiers, to show who can read something.',
-    routes: ['GET /tiers'],
+    scope: 'tag:destroy',
+    routes: ['DELETE /tags/:id'],
+    allowedParameters: ['include'],
+    checksContent: true,
   },
+  { scope: 'user:browse', routes: ['GET /users'] },
+  { scope: 'tier:browse', routes: ['GET /tiers'] },
+  { scope: 'newsletter:browse', routes: ['GET /newsletters'] },
   {
-    name: 'newsletters:read',
-    description: 'List newsletters.',
-    routes: ['GET /newsletters'],
-  },
-  {
-    name: 'site:read',
-    description: 'Read the public details of the site, such as its logo, icon and accent colour.',
-    routes: ['GET /site'],
-  },
-  {
-    name: 'slugs:read',
-    description: 'Ask Ghost for an unused slug, as the editor does before saving.',
+    scope: 'slug:generate',
     routes: ['GET /slugs/:type/:name', 'GET /slugs/:type/:name/:id'],
   },
+  // The site's public details, for showing its branding. Ghost serves them without signing in,
+  // so they need no scope.
+  { scope: null, routes: ['GET /site'] },
 ];
 
 const OBJECT_ID = /^[0-9a-f]{24}$/;
@@ -146,16 +191,16 @@ interface Route {
   readonly method: string;
   readonly segments: readonly Segment[];
   readonly route: string;
-  readonly scope: AdminApiScope;
+  readonly group: AdminApiRouteGroup;
 }
 
-const ROUTES: readonly Route[] = ADMIN_API_ALLOWLIST.flatMap((scope) =>
-  scope.routes.map((route) => {
+const ROUTES: readonly Route[] = ADMIN_API_ALLOWLIST.flatMap((group) =>
+  group.routes.map((route) => {
     const [method = '', path = ''] = route.split(' ');
     return {
       method,
       route,
-      scope,
+      group,
       segments: path
         .split('/')
         .filter(Boolean)
@@ -195,11 +240,28 @@ function matches(route: Route, segments: readonly string[]): boolean {
   );
 }
 
-/** The route an allowed request matched, and the scope it belongs to. */
+/**
+ * The scope a field in `fieldScopes` needs: `null` when the group's own is enough, and
+ * `undefined` when the map doesn't name it.
+ */
+export function scopeForField(
+  fieldScopes: Readonly<Record<string, AppScopeName | null>>,
+  field: string,
+): AppScopeName | null | undefined {
+  const name = field.toLowerCase();
+  for (const [key, scope] of Object.entries(fieldScopes)) {
+    if (key.endsWith('.*') ? name.startsWith(key.slice(0, -1)) : name === key) {
+      return scope;
+    }
+  }
+  return undefined;
+}
+
+/** The route an allowed request matched, and the group it belongs to. */
 export interface AllowedAdminApiRoute {
   /** The route as the allowlist writes it, such as `PUT /posts/:id`. */
   readonly route: string;
-  readonly scope: AdminApiScope;
+  readonly group: AdminApiRouteGroup;
 }
 
 /**
@@ -223,5 +285,5 @@ export function findAllowedAdminApiRoute(
     return undefined;
   }
   const route = ROUTES.find((each) => each.method === method && matches(each, segments));
-  return route && { route: route.route, scope: route.scope };
+  return route && { route: route.route, group: route.group };
 }

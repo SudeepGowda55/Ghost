@@ -2,11 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { checkAdminApiRequest } from '../../src/bridge/index.ts';
 import type { FetchMethod } from '../../src/bridge/rules.ts';
+import { APP_SCOPE_NAMES, type AppScopeName } from '../../src/scopes.ts';
 
 const root = new URL('https://site.example/ghost/api/admin/');
 
-const check = (path: string, method: FetchMethod = 'GET', apiRoot = root, body?: string) =>
-  checkAdminApiRequest({ path, method, body }, apiRoot);
+// Every scope but the stats one, unless a test says otherwise.
+const APPROVED = new Set(APP_SCOPE_NAMES.filter((name) => name !== 'post:read_stats'));
+
+const check = (
+  path: string,
+  method: FetchMethod = 'GET',
+  apiRoot = root,
+  body?: string,
+  approved: ReadonlySet<AppScopeName> = APPROVED,
+) => checkAdminApiRequest({ path, method, body }, apiRoot, approved);
 
 // The URL a path resolves to, or null when it is not an Admin API path. Every path these tests
 // resolve is one apps can reach, except in the tests about the allowlist.
@@ -46,10 +55,10 @@ describe('checking an Admin API request', () => {
     expect(root.href).toBe('https://site.example/ghost/api/admin/');
   });
 
-  it('names the path within the API, as the allowlist read it, and the scope that allows it', () => {
+  it('names the path within the API, as the allowlist read it, and the group that allows it', () => {
     const result = check('/posts/?limit=5');
     expect(result).toMatchObject({ pathname: '/posts/' });
-    expect(result.problem === undefined && result.scope.name).toBe('posts:read');
+    expect(result.problem === undefined && result.group.scope).toBe('post:browse');
     expect(check('/')).toMatchObject({ pathname: '/' });
   });
 
@@ -185,7 +194,7 @@ describe('checking an Admin API request', () => {
     expect(check('/posts/slug/v4/').problem).toBeUndefined();
   });
 
-  it('allows only the query parameters a write scope lists, by exact name', () => {
+  it('allows only the query parameters a write group lists, by exact name', () => {
     const id = '5ddc9141c35e7700383b2937';
     for (const [method, path, parameter] of [
       ['PUT', `/posts/${id}/?newsletter=weekly`, 'newsletter'],
@@ -219,8 +228,67 @@ describe('checking an Admin API request', () => {
       check(`/posts/${id}/?formats=lexical&include=tags&save_revision=true`, 'PUT').problem,
     ).toBeUndefined();
     expect(check(`/tags/${id}/?include=count.posts`, 'PUT').problem).toBeUndefined();
-    // A read takes any parameter.
-    expect(check('/posts/?filter=newsletter:weekly&source=html').problem).toBeUndefined();
+    // A tag read takes any parameter.
+    expect(check('/tags/?filter=visibility:public&anything=else').problem).toBeUndefined();
+  });
+
+  // How a post performed is `post:read_stats`'s, so reads and writes of posts and pages can't
+  // include it, or sort by it.
+  it('refuses a route whose scope the installation wasn’t approved for', () => {
+    const approved = new Set<AppScopeName>(['post:browse']);
+    expect(check('/posts/', 'GET', root, undefined, approved).problem).toBeUndefined();
+    expect(check('/tags/', 'GET', root, undefined, approved)).toEqual({
+      problem: 'blocked',
+      pathname: '/tags/',
+      detail: "This app wasn't approved for tag:browse, which GET /tags/ needs",
+    });
+    expect(check('/posts/', 'POST', root, '{"posts":[{"title":"Hi"}]}', approved).problem).toBe(
+      'blocked',
+    );
+    // The site's public details need no scope.
+    expect(check('/site/', 'GET', root, undefined, new Set()).problem).toBeUndefined();
+  });
+
+  // How a post performed is `post:read_stats`'s, so reads and writes of posts and pages can
+  // include it, or sort by it, only with that scope.
+  it('includes or sorts by how posts performed only with post:read_stats', () => {
+    const id = '5ddc9141c35e7700383b2937';
+    const cases = [
+      ['GET', '/posts/?include=email', 'including email'],
+      ['GET', '/posts/?include=tags,count.clicks', 'including count.clicks'],
+      ['GET', '/posts/?include=tags&include=sentiment', 'including sentiment'],
+      ['GET', `/posts/${id}/?include=tags, count.signups`, 'including count.signups'],
+      ['GET', '/pages/?include=count.paid_conversions', 'including count.paid_conversions'],
+      [
+        'GET',
+        '/posts/slug/hello/?include=count.positive_feedback',
+        'including count.positive_feedback',
+      ],
+      ['PUT', `/posts/${id}/?include=email`, 'including email'],
+      ['POST', '/pages/?include=count.signups', 'including count.signups'],
+      ['GET', '/posts/?order=sentiment%20desc', 'ordering by sentiment'],
+      ['GET', '/posts/?order=title%20asc,%20email.open_rate%20desc', 'ordering by email.open_rate'],
+    ] as const;
+    const withStats = new Set([...APPROVED, 'post:read_stats' as const]);
+    for (const [method, path, what] of cases) {
+      const pathname = path.split('?')[0];
+      expect(check(path, method), `${method} ${path}`).toEqual({
+        problem: 'blocked',
+        pathname,
+        detail: `This app wasn't approved for post:read_stats, which ${what} needs`,
+      });
+      expect(check(path, method, root, undefined, withStats).problem, path).toBeUndefined();
+    }
+    expect(
+      check('/posts/?include=tags,authors,tiers&order=published_at%20desc&limit=5').problem,
+    ).toBeUndefined();
+    expect(check(`/posts/${id}/?include=post_revisions.author&formats=lexical`).problem).toBe(
+      undefined,
+    );
+    expect(check('/posts/?include=members').problem).toBe('blocked');
+    // Ghost skips an empty part, so it needs nothing.
+    expect(check('/posts/?include=tags,,authors').problem).toBeUndefined();
+    expect(check('/posts/?debug=true').problem).toBe('blocked');
   });
 
   it('checks the content a write sends', () => {
@@ -264,7 +332,7 @@ describe('checking an Admin API request', () => {
     for (const path of ['/@evil.example/', '/:443@evil.example/', '/%40evil.example']) {
       expect(landsOn(path), path).toBe(path);
     }
-    for (const path of ['/posts/?x=@evil.example', '/posts/#@evil.example']) {
+    for (const path of ['/tags/?x=@evil.example', '/tags/#@evil.example']) {
       expect(new URL(resolved(path)!).origin, path).toBe('https://site.example');
     }
   });

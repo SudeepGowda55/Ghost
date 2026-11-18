@@ -1,4 +1,5 @@
-import { findAllowedAdminApiRoute, type AdminApiScope } from './allowlist.ts';
+import type { AppScopeName } from '../scopes.ts';
+import { findAllowedAdminApiRoute, scopeForField, type AdminApiRouteGroup } from './allowlist.ts';
 import { refusedContent } from './content.ts';
 import { FETCH_PATH_MAX_LENGTH } from './fetch.ts';
 import { isContainedPath, type FetchMethod } from './rules.ts';
@@ -27,14 +28,14 @@ export interface AdminApiRequest {
 
 /**
  * The result of `checkAdminApiRequest`: the URL to request, the path within the API it reaches
- * and the scope that allows it, or the code Admin refuses the request with. A refusal as
- * `blocked` says why in `detail`, naming the method and path, or what in the request was refused.
+ * and the allowlist group that allows it, or the code Admin refuses the request with. A refusal
+ * as `blocked` says why in `detail`, naming the method and path, or what in the request was refused.
  */
 export type AdminApiRequestCheck =
   | {
       readonly url: URL;
       readonly pathname: string;
-      readonly scope: AdminApiScope;
+      readonly group: AdminApiRouteGroup;
       readonly problem?: undefined;
     }
   | { readonly problem: 'invalid_path' }
@@ -55,10 +56,15 @@ export type AdminApiRequestCheck =
  * A path that stays under the root is `blocked` unless the allowlist has a route for where it
  * resolves to, with this method. It's also `blocked` when its path or query mentions `ghost/api`,
  * or its first segment is an old API version (`v4`), whatever the allowlist says; when it carries
- * a query parameter its scope doesn't list; or when its scope checks content and its body holds a
- * field `refusedContent` refuses.
+ * a query parameter its group doesn't list; when its group checks content and its body holds a
+ * field `refusedContent` refuses; or when it needs a scope, by its route, an `include` or an
+ * `order`, that isn't among `approvedScopes`: those of the installation the app runs as.
  */
-export function checkAdminApiRequest(request: AdminApiRequest, apiRoot: URL): AdminApiRequestCheck {
+export function checkAdminApiRequest(
+  request: AdminApiRequest,
+  apiRoot: URL,
+  approvedScopes: ReadonlySet<AppScopeName>,
+): AdminApiRequestCheck {
   const { path, method = 'GET', body } = request;
   if (typeof path !== 'string' || path.length > FETCH_PATH_MAX_LENGTH || !isContainedPath(path)) {
     return { problem: 'invalid_path' };
@@ -103,11 +109,20 @@ export function checkAdminApiRequest(request: AdminApiRequest, apiRoot: URL): Ad
   if (!allowed) {
     return blocked(`Apps can't use ${method} ${pathname}`);
   }
-  const { scope } = allowed;
+  const { group } = allowed;
+  const unapproved = (scope: AppScopeName | null, what: string) =>
+    scope !== null && !approvedScopes.has(scope)
+      ? blocked(`This app wasn't approved for ${scope}, which ${what} needs`)
+      : undefined;
+
+  const forRoute = unapproved(group.scope, `${method} ${pathname}`);
+  if (forRoute) {
+    return forRoute;
+  }
 
   // Names are compared once decoded, by exact match, so `%5Bnewsletter%5D` is `[newsletter]`,
   // which isn't on any list, although Ghost's query parser reads it as `newsletter`.
-  const { allowedParameters } = scope;
+  const { allowedParameters } = group;
   if (allowedParameters) {
     for (const name of url.searchParams.keys()) {
       if (!allowedParameters.includes(name)) {
@@ -116,7 +131,40 @@ export function checkAdminApiRequest(request: AdminApiRequest, apiRoot: URL): Ad
     }
   }
 
-  if (scope.checksContent && body !== undefined) {
+  // Ghost splits both on commas and trims each part, and reads a sort as a field and a
+  // direction. Every `include` and `order` counts, as Ghost's query parser may read any of them.
+  const { fieldScopes } = group;
+  if (fieldScopes) {
+    for (const value of url.searchParams.getAll('include')) {
+      for (const relation of value.split(',').map((part) => part.trim())) {
+        if (!relation) {
+          continue;
+        }
+        const scope = scopeForField(fieldScopes, relation);
+        if (scope === undefined) {
+          return blocked(`Apps can't include ${relation} on ${method} ${pathname}`);
+        }
+        const refused = unapproved(scope, `including ${relation}`);
+        if (refused) {
+          return refused;
+        }
+      }
+    }
+    for (const value of url.searchParams.getAll('order')) {
+      for (const part of value.split(',')) {
+        const [field = ''] = part.trim().split(/\s+/);
+        const refused = unapproved(
+          scopeForField(fieldScopes, field) ?? null,
+          `ordering by ${field}`,
+        );
+        if (refused) {
+          return refused;
+        }
+      }
+    }
+  }
+
+  if (group.checksContent && body !== undefined) {
     let content: unknown;
     try {
       content = JSON.parse(body);
@@ -129,5 +177,5 @@ export function checkAdminApiRequest(request: AdminApiRequest, apiRoot: URL): Ad
     }
   }
 
-  return { url, pathname, scope };
+  return { url, pathname, group };
 }

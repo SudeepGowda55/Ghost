@@ -85,7 +85,7 @@ export {
   normaliseAppPath,
 } from './bridge/rules.ts';
 export type {
-  AdminApiScope,
+  AdminApiRouteGroup,
   AppErrorCode,
   AppExports,
   AppPath,

@@ -289,7 +289,13 @@ const AppFrame: React.FC<{
     createAppFrameSession({
       surfaceOrigin,
       context: () => contextRef.current,
-      fetchAdminApi: createAdminApiFetch({ apiRoot: new URL(apiUrl('/')), ghostVersion }),
+      // The session is pinned to this installation's revision, so its approved scopes hold for
+      // as long as the session does.
+      fetchAdminApi: createAdminApiFetch({
+        apiRoot: new URL(apiUrl('/')),
+        approvedScopes: new Set(manifest.access.map((scope) => scope.name)),
+        ghostVersion,
+      }),
       navigate: (next, { replace, move: appMove }) =>
         navigateForApp(appPathRoute(id, next, entryPath), { replace, state: { appMove } }),
       // Wherever the app opens, Admin records the way back to it. The app can't set this.

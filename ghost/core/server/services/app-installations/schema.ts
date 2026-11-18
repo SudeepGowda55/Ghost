@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Knex } from 'knex';
+import { APP_SCOPE_NAMES, type AppScopeName } from '@tryghost/app-contracts';
 import { AppManifestSchema } from '@tryghost/app-contracts/manifest';
 import { DbBoolean } from '../../lib/db-types/boolean';
 import { DbDate } from '../../lib/db-types/date';
@@ -27,6 +28,24 @@ export const StoredManifest = DbJson(AppManifestSchema, {
   message: 'The stored manifest is not JSON.',
 });
 
+/**
+ * One thing that differs from the manifest approved when a row was added: a field, by path, or
+ * one scope's access. An access change needs approval when it widens access.
+ */
+export const AppManifestChange = z.union([
+  z.strictObject({ path: z.string(), requires_approval: z.boolean() }),
+  z.strictObject({
+    scope: z.enum(APP_SCOPE_NAMES as [AppScopeName, ...AppScopeName[]]),
+    change: z.enum(['added', 'removed', 'backend_added', 'backend_removed']),
+    backend: z.boolean(),
+  }),
+]);
+export type AppManifestChange = z.infer<typeof AppManifestChange>;
+
+export const StoredChanges = DbJson(z.array(AppManifestChange), {
+  message: 'The stored changes are not JSON.',
+});
+
 // Mirrors schema.ts's `isIn` on the column, which stays static config and does not import this.
 export const AppInstallationManifestSource = z.enum(['install', 'approval', 'update', 'resume']);
 
@@ -41,6 +60,7 @@ export const DbAppInstallationManifest = z.object({
   icon_data_url: z.string().nullable(),
   source: AppInstallationManifestSource,
   requires_approval: DbBoolean,
+  changes: StoredChanges,
   created_at: DbDate,
 });
 

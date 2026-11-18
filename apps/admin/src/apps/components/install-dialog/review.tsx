@@ -30,7 +30,14 @@ export const Review: React.FC<ReviewProps> = ({
 }) => {
   const { manifest, installation } = preview;
   const name = installation?.manifest.name;
-  const rows = installation ? describeChanges(installation, preview, installation.changes) : [];
+  // Access changes are shown with the app's access, not among the field rows.
+  const rows = installation
+    ? describeChanges(
+        installation,
+        preview,
+        installation.changes.filter((change) => 'path' in change),
+      )
+    : [];
   return (
     <>
       <ReviewHeader

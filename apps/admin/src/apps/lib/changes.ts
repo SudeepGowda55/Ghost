@@ -1,6 +1,6 @@
 import type {
   AppManifest,
-  AppManifestChange,
+  AppManifestFieldChange,
 } from '@tryghost/admin-x-framework/api/app-installations';
 
 /** A manifest and where it was read from: what was approved, or what is being reviewed. */
@@ -69,7 +69,7 @@ function surfaceFields(approved: AppManifest, reviewed: AppManifest): Field[] {
 const topOf = (path: string) => path.split(/[.[]/, 1)[0];
 
 /** Whether a change is to this field, or to something inside it. */
-const within = (change: AppManifestChange, field: string) =>
+const within = (change: AppManifestFieldChange, field: string) =>
   change.path === field || change.path.startsWith(`${field}.`);
 
 /**
@@ -80,7 +80,7 @@ const within = (change: AppManifestChange, field: string) =>
 export function describeChanges(
   approved: ManifestVersion,
   reviewed: ManifestVersion,
-  changes: AppManifestChange[],
+  changes: AppManifestFieldChange[],
 ): ChangeRow[] {
   const fields = [...FIELDS, ...surfaceFields(approved.manifest, reviewed.manifest)];
   const rows: ChangeRow[] = [];

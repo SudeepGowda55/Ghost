@@ -1,18 +1,11 @@
-import {
-  compareManifests,
-  isAccessChange,
-  type FieldChange,
-} from '@tryghost/app-contracts/manifest';
+import { compareAccess } from '@tryghost/app-contracts';
+import { compareManifests, isAccessChange } from '@tryghost/app-contracts/manifest';
+import type { AppManifestChange } from './schema';
 import type { AddedRow } from './app-installations-repository';
 import type { Installation } from './codec';
 import type { LoadedManifest } from './load-manifest';
 
-/** One field that differs from what the publisher approved. */
-export interface AppManifestChange {
-  /** Where the change is: a path in the manifest, such as `surfaces[0].url`. */
-  path: string;
-  requires_approval: boolean;
-}
+export type { AppManifestChange } from './schema';
 
 type Approved = Pick<Installation, 'manifest'>;
 
@@ -24,14 +17,19 @@ export function changesFrom(approved: Approved, loaded: LoadedManifest): AppMani
   return compare(approved, loaded).changes;
 }
 
+/** What an install grants: every scope it declares, as added. */
+export function installChanges(loaded: LoadedManifest): AppManifestChange[] {
+  return compareAccess(undefined, loaded.manifest.access);
+}
+
 function compare(approved: Approved, loaded: LoadedManifest) {
   const { changes, requiresApproval } = compareManifests(approved.manifest, loaded.manifest);
   return {
-    // Access changes still decide whether approval is needed, but aren't served until the
-    // installation stores and shows them.
-    changes: changes
-      .filter((change): change is FieldChange => !isAccessChange(change))
-      .map(({ path, requiresApproval: requires }) => ({ path, requires_approval: requires })),
+    changes: changes.map((change): AppManifestChange =>
+      isAccessChange(change)
+        ? change
+        : { path: change.path, requires_approval: change.requiresApproval },
+    ),
     requiresApproval,
   };
 }
@@ -126,6 +124,7 @@ export function approvalWrite(manifests: Manifests): ApprovalWrite {
           loaded: manifests.loaded,
           source: 'approval',
           requiresApproval: decision.kind === 'suspend',
+          changes: decision.changes,
         },
       };
   }
@@ -151,13 +150,14 @@ export function recheckWrite(manifests: Manifests): ManifestWrite {
           loaded,
           source: decision.kind === 'resume' ? 'resume' : 'update',
           requiresApproval: false,
+          changes: decision.changes,
         },
       };
     // Replaces any older pending manifest, since only the latest is worth reviewing.
     case 'suspend':
       return {
         kind: 'add_pending',
-        row: { loaded, source: 'update', requiresApproval: true },
+        row: { loaded, source: 'update', requiresApproval: true, changes: decision.changes },
       };
   }
 }

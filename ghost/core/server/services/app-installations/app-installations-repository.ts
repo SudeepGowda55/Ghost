@@ -16,7 +16,9 @@ import type { LoadedManifest } from './load-manifest';
 import {
   DbAppInstallation,
   DbAppInstallationManifest,
+  StoredChanges,
   type AppInstallationManifestSource,
+  type AppManifestChange,
 } from './schema';
 
 const INSTALLATIONS = 'app_installations';
@@ -26,6 +28,7 @@ const HistoryManifestRow = DbAppInstallationManifest.pick({
   id: true,
   source: true,
   requires_approval: true,
+  changes: true,
   created_at: true,
 });
 
@@ -98,6 +101,8 @@ export interface AddedRow {
   loaded: LoadedManifest;
   source: z.infer<typeof AppInstallationManifestSource>;
   requiresApproval: boolean;
+  /** What differs from the manifest approved when the row is added. */
+  changes: AppManifestChange[];
   iconDataUrl: string | null;
 }
 
@@ -120,7 +125,13 @@ class LockedInstallation {
   }
 
   /** Adds a manifest row for the installation, and returns its ID. */
-  async addManifest({ loaded, source, requiresApproval, iconDataUrl }: AddedRow): Promise<string> {
+  async addManifest({
+    loaded,
+    source,
+    requiresApproval,
+    changes,
+    iconDataUrl,
+  }: AddedRow): Promise<string> {
     const id = new ObjectId().toHexString();
     await this.trx(MANIFESTS).insert({
       id,
@@ -132,6 +143,7 @@ class LockedInstallation {
       icon_data_url: iconDataUrl,
       source,
       requires_approval: requiresApproval,
+      changes: z.encode(StoredChanges, changes),
       created_at: toDatabaseDate(new Date()),
     });
     return id;
@@ -272,6 +284,7 @@ export class AppInstallationsRepository {
         'id',
         'source',
         'requires_approval',
+        'changes',
         'created_at',
       );
     const actionRows = this.knex('actions as action')
@@ -326,6 +339,7 @@ export class AppInstallationsRepository {
   async insert(
     loaded: LoadedManifest,
     iconDataUrl: string | null,
+    changes: AppManifestChange[],
     { transacting }: { transacting: Knex.Transaction },
   ): Promise<Installation> {
     const { manifest } = loaded;
@@ -372,6 +386,7 @@ export class AppInstallationsRepository {
       icon_data_url: iconDataUrl,
       source: 'install',
       requires_approval: false,
+      changes: z.encode(StoredChanges, changes),
       created_at: now,
     });
     return z.decode(InstallationRow, written);

@@ -745,6 +745,39 @@ describe('App installations Admin API', function () {
       assert.equal(row.revision, 2);
     });
 
+    it('reviews and records access changes by meaning, in the preview and the history', async function () {
+      const POST_READ = { post: { scopes: [{ name: 'post:read', backend: true }] } };
+      const installed = await install({ access: POST_READ });
+      const widened = manifest({
+        access: { post: { scopes: [{ name: 'post:edit' }, ...POST_READ.post.scopes] } },
+      });
+      serve(widened);
+
+      const reviewed = await preview();
+
+      const added = [{ scope: 'post:edit', change: 'added', backend: false }];
+      assert.deepEqual(reviewed.installation.changes, added);
+
+      serve(widened);
+      await approve(
+        installed.id,
+        MANIFEST_URL,
+        reviewed.digest,
+        200,
+        reviewed.installation.revision,
+      );
+      const { body } = await agent
+        .get(`apps/installations/${installed.id}/?include=history`)
+        .expectStatus(200);
+      assert.deepEqual(
+        body.app_installations[0].history.map((entry: any) => [entry.event, entry.changes]),
+        [
+          ['changes_approved', added],
+          ['installed', [{ scope: 'post:read', change: 'added', backend: true }]],
+        ],
+      );
+    });
+
     it('approves the manifest waiting for approval as its own row, not a copy', async function () {
       const installed = await install();
       const pendingId = await suspendWithPending(installed.id, manifest({ name: 'Podcasts' }));

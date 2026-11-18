@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DbAppInstallation, DbAppInstallationManifest } from './schema';
+import { DbAppInstallation, DbAppInstallationManifest, type AppManifestChange } from './schema';
 
 /** The installation's own columns that it's read with. */
 export const InstallationFields = DbAppInstallation.pick({
@@ -50,6 +50,11 @@ export interface AppInstallationHistoryEntry {
   created_at: Date;
   /** The host the app moved to. Only set when an approval moved the app. */
   moved_to?: string;
+  /**
+   * What the entry changed, as stored with its manifest row: fields, then access in the scope
+   * registry's order. A suspension lists what waits for approval. Left out when nothing changed.
+   */
+  changes?: AppManifestChange[];
 }
 
 /** An installation, with its history when it's read with it. */

@@ -16,6 +16,7 @@ import { ensureTransaction, transactionOf } from '../../lib/ensure-transaction';
 import {
   approvalWrite,
   changesFrom,
+  installChanges,
   recheckWrite,
   type AppManifestChange,
   type ManifestWrite,
@@ -59,6 +60,7 @@ export interface AppInstallationPreview {
     manifest_url: string;
     manifest: AppManifest;
     icon_data_url: string | null;
+    /** Field changes by path, then access changes in the registry's order. */
     changes: AppManifestChange[];
   } | null;
 }
@@ -247,7 +249,12 @@ export class AppInstallationsService {
     });
     const install = () =>
       ensureTransaction(executor, async (transacting) => {
-        const installation = await this.repository.insert(loaded, iconDataUrl, { transacting });
+        const installation = await this.repository.insert(
+          loaded,
+          iconDataUrl,
+          installChanges(loaded),
+          { transacting },
+        );
         await this.actionLog.record(
           transacting,
           context,
